@@ -14,6 +14,7 @@ setup(name="Connectome utilities",
                         "scipy>=1.5.0",
                         "voxcell>=2.7.0"
                         "bluepy>=2.0.0",
+                        "tqdm>=4.50.0",
                         "bluepysnap>=0.10.0"],
       description="Utilities for topological characracterization of circuit connectivity.",
       license="GPL",

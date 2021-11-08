@@ -50,3 +50,23 @@ def group_by_square_grid(df_in, resolution=None, neurons_per_group=None):
 
 def group_by_hex_grid(df_in, resolution=None, neurons_per_group=None):
     raise NotImplementedError()
+
+
+def flip(df_in, lst_values=None, index="gid", contract_values=False, categorical=False):
+    if isinstance(df_in, pandas.DataFrame):
+        df_in = df_in[index]
+    idx_frame = df_in.index.to_frame()
+    if lst_values is None:
+        lst_values = idx_frame.columns.values
+    idx_frame.index = df_in.values
+    idx_frame = idx_frame[lst_values]
+
+    if contract_values:
+        new_name = ";".join(idx_frame.columns)
+        idx_series = idx_frame.apply(lambda row: "_".join(map(str, row)), axis=1)
+        idx_series.name = new_name
+        if categorical:
+            idx_series = pandas.Series(pandas.Categorical(idx_series), index=idx_series.index, name=idx_series.name)
+        return idx_series
+    return idx_frame
+
