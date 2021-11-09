@@ -77,9 +77,9 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
     return matrices
 
 
-def _make_node_lookup(circ, neuron_groups, fill_unused_gids=True, lst_values=None):
+def _make_node_lookup(circ, neuron_groups, fill_unused_gids=True):
     from .neuron_groups import flip
-    node_lookup = flip(neuron_groups, contract_values=True, lst_values=lst_values)
+    node_lookup = flip(neuron_groups, contract_values=True)
     if fill_unused_gids:
         all_gids = circ.cells.ids()
         missing_gids = numpy.setdiff1d(all_gids, node_lookup.index)
@@ -147,12 +147,12 @@ def connection_matrix_between_groups_partial(sonata_fn, node_lookup, **kwargs):
 
 
 def circuit_matrix_between_groups(circ, neuron_groups, connectome=LOCAL_CONNECTOME,
-                                  extract_full=False, lst_values=None):
+                                  extract_full=False):
     conn_file = find_sonata_connectome(circ, connectome)
 
     if extract_full:
-        node_lookup = _make_node_lookup(circ, neuron_groups, lst_values=lst_values)
+        node_lookup = _make_node_lookup(circ, neuron_groups)
         return connection_matrix_between_groups_partition(conn_file, node_lookup)
     else:
-        node_lookup = _make_node_lookup(circ, neuron_groups, lst_values=lst_values, fill_unused_gids=False)
+        node_lookup = _make_node_lookup(circ, neuron_groups, fill_unused_gids=False)
         return connection_matrix_between_groups_partial(conn_file, node_lookup)
