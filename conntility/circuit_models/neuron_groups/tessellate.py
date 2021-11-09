@@ -376,14 +376,14 @@ class TriTille:
         LOG.info("\t: %s", rxj_outside_grid)
         return graphic
 
-    def bin_rhombically(self, xys):
+    def bin_rhombically(self, xys, **kwargs):
         """..."""
         uvs = self.transform(xys)
         scaled_u = np.array(np.floor(uvs.u.values / self._side), dtype=int)
         scaled_v = np.array(np.floor(uvs.v.values / self._side), dtype=int)
         return Frame2D(i=scaled_u, j=scaled_v, dtype=int, index=xys.index)
 
-    def bin_trinagularly(self, xys):
+    def bin_trinagularly(self, xys, **kwargs):
         """..."""
         ijs = self.bin_rhombically(xys)
 

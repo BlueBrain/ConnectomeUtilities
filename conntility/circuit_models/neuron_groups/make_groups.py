@@ -17,35 +17,36 @@ def load_neurons(circ, properties, base_target=None, **kwargs):
     return neurons
 
 
-def group_by_properties(df_in, lst_props):
-    idxx = pandas.MultiIndex.from_frame(df_in[lst_props])
-    idxx.names = ["idx-" + x for x in idxx.names]
+def group_by_properties(df_in, lst_props, prefix="idx-", replace=True):
+    vals = df_in[lst_props]
+    vals.columns = [prefix + col for col in vals.columns]
+    if not replace:
+        vals = pandas.concat([df_in.index.to_frame(), vals])
 
-    df_in = df_in.set_index(idxx).sort_index()
+    df_in = df_in.set_index(pandas.MultiIndex.from_frame(vals)).sort_index()
     return df_in
 
 
-def group_by_binned_properties(df_in, lst_props, bins):
+def group_by_binned_properties(df_in, lst_props, bins, prefix="binned-", replace=True):
     def make_bins(values):
         if isinstance(bins, dict):
             b = bins[values.name]
         else:
             b = bins
         if not hasattr(b, "__iter__"):
-            b = numpy.linspace(numpy.min(values), numpy.max(values) + 1E-12, b)
+            b = numpy.arange(numpy.min(values), numpy.max(values) + 1E-12, b)
         return b
     binned_vals = df_in[lst_props].apply(lambda x: numpy.digitize(x, bins=make_bins(x)), axis=0)
-    binned_vals.columns = ["binned-" + x for x in binned_vals.columns]
+    binned_vals.columns = [prefix + col for col in binned_vals.columns]
+
+    if not replace:
+        binned_vals = pandas.concat([df_in.index.to_frame(), binned_vals])
 
     df_in = df_in.set_index(pandas.MultiIndex.from_frame(binned_vals)).sort_index()
     return df_in
 
 
-def group_by_square_grid(df_in, resolution=None, neurons_per_group=None):
-    raise NotImplementedError()
-
-
-def group_by_hex_grid(df_in, radius, columns=None):
+def group_by_grid(df_in, radius, columns=None, shape="hexagonally", prefix="grid-", replace=True):
     if columns is None:
         columns = ["ss flat x", "ss flat y"]
     assert len(columns) == 2, "Need one column as x-coordinate and one as y-coordinate"
@@ -53,20 +54,21 @@ def group_by_hex_grid(df_in, radius, columns=None):
 
     flat_locs = df_in[columns].rename(dict([(a, b) for a, b in zip(columns, ["x", "y"])]), axis=1)
 
-    hexmap = tritilling.bin_hexagonally(flat_locs, use_columns_row_indexing=False)
+    hexmap = getattr(tritilling, "bin_" + shape)(flat_locs, use_columns_row_indexing=False)
     grid = tritilling.locate_grid(hexmap)
 
     annotation = tritilling.annotate(grid, using_column_row=True)
-
     annotated_grid = grid.assign(subtarget=annotation.loc[grid.index])
+    per_neuron_annotation = annotated_grid.loc[pandas.MultiIndex.from_frame(hexmap)]
 
-    per_neuron_annotation = annotated_grid.loc[map(tuple, hexmap.values)]
+    hexmap.columns = [prefix + col for col in hexmap.columns]
+    per_neuron_annotation.columns = [prefix + col for col in per_neuron_annotation.columns]
+    if not replace:
+        hexmap = hexmap.reset_index()
+    per_neuron_annotation = per_neuron_annotation.set_index(pandas.MultiIndex.from_frame(hexmap))
+
     df_in = df_in.set_index(per_neuron_annotation.index)
-
-    df_in["hex center x"] = per_neuron_annotation["x"]
-    df_in["hex center y"] = per_neuron_annotation["y"]
-    df_in["hex subtarget"] = per_neuron_annotation["subtarget"]
-
+    df_in = pandas.concat([df_in, per_neuron_annotation], axis=1)
     return df_in
 
 

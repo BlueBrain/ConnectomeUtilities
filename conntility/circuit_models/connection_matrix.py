@@ -73,19 +73,21 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
     return matrices
 
 
-def _make_node_lookup(circ, neuron_groups):
+def _make_node_lookup(circ, neuron_groups, fill_unused_gids=True, lst_values=None):
     from .neuron_groups import flip
-    node_lookup = flip(neuron_groups, contract_values=True, categorical=True)
-    all_gids = circ.cells.ids()
-    missing_gids = numpy.setdiff1d(all_gids, node_lookup.index)
-    node_lookup = pandas.concat([node_lookup,
-                                      pandas.Series([STR_VOID] * len(missing_gids),
-                                                    index=missing_gids)], axis=0)
+    node_lookup = flip(neuron_groups, contract_values=True, categorical=True, lst_values=lst_values)
+    if fill_unused_gids:
+        all_gids = circ.cells.ids()
+        missing_gids = numpy.setdiff1d(all_gids, node_lookup.index)
+        node_lookup = pandas.concat([node_lookup,
+                                     pandas.Series([STR_VOID] * len(missing_gids),
+                                                   index=missing_gids)], axis=0)
     return node_lookup
 
 
 def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=50000000):
     # TODO: If the user accidently provides a "neuron_groups" instead of "node_lookup" input give helpful message
+    # TODO: Evaluate if it is necessary to fill node_lookup for unused gids with STR_VOID
     h5 = h5py.File(sonata_fn, "r")['edges/default']
 
     dset_sz = h5['source_node_id'].shape[0]
@@ -109,43 +111,43 @@ def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=500
     return counts
 
 
-def connection_matrix_between_groups_partial(sonata_fn, node_lookup, chunk=100000):
+def _pre_gids_for_post_gid(h5, post_gid):
+    rnge = h5["indices"]["target_to_source"]["node_id_to_ranges"][post_gid - 1]
+    son_idx_fr = [h5["source_node_id"][r[0]:r[1]]
+                  for r in h5["indices"]["target_to_source"]["range_to_edge_id"][rnge[0]:rnge[1]]]
+    son_idx_fr = numpy.hstack(son_idx_fr) + 1
+    return son_idx_fr
+
+
+def connection_matrix_between_groups_partial(sonata_fn, node_lookup, **kwargs):
     # TODO: If the user accidently provides a "neuron_groups" instead of "node_lookup" input give helpful message
     h5 = h5py.File(sonata_fn, "r")['edges/default']
-    midxx = pandas.MultiIndex.from_tuples([], names=["Source node", "Target node"])
-    counts = pandas.Series([], index=midxx, dtype=int)
-    buffer_fr = []; buffer_to = []
 
-    use_gids = node_lookup.index.values[node_lookup != STR_VOID]
+    node_lookup = node_lookup[node_lookup != STR_VOID]
+    gids_per_node = node_lookup.to_frame().groupby(node_lookup.name).apply(lambda x: x.index.values)
 
-    for gid in tqdm(use_gids):
-        rnge = h5["indices"]["target_to_source"]["node_id_to_ranges"][gid - 1]
-        for r in h5["indices"]["target_to_source"]["range_to_edge_id"][rnge[0]:rnge[1]]:
-            son_idx_fr = h5["source_node_id"][r[0]:r[1]]
-            son_idx_to = h5["target_node_id"][r[0]:r[1]]
-            reg_fr = node_lookup[son_idx_fr + 1]
-            reg_to = node_lookup[son_idx_to + 1]
-            buffer_fr.append(reg_fr.values); buffer_to.append(reg_to.values)
-        if len(buffer_fr) >= chunk:
-            new_counts = pandas.DataFrame({"Source node": numpy.hstack(buffer_fr),
-                                           "Target node": numpy.hstack(buffer_to)}).value_counts()
-            counts = counts.add(new_counts, fill_value=0)
-            buffer_fr = []; buffer_to = []
-    if len(buffer_fr) > 0:
-        new_counts = pandas.DataFrame({"Source node": numpy.hstack(buffer_fr),
-                                       "Target node": numpy.hstack(buffer_to)}).value_counts()
-        counts = counts.add(new_counts, fill_value=0)
-    for lvl, nm in zip(counts.index.levels, counts.index.names):
-        if STR_VOID in lvl:
-            counts = counts.drop(STR_VOID, level=nm)
+    lst_node_to = []
+    lst_counts_from = []
+    for node_to, lst_post_gids in gids_per_node.items():
+        lst_pre_gids = [_pre_gids_for_post_gid(h5, post_gid) for post_gid in lst_post_gids]
+        lst_pre_gids = numpy.hstack(lst_pre_gids)
+        node_from = node_lookup[node_lookup.index.intersection(lst_pre_gids)]
+        counts_from = node_from.value_counts()
+        counts_from.index.name = "Source node"
+        lst_node_to.append(node_to)
+        lst_counts_from.append(counts_from)
+    counts = pandas.concat(lst_counts_from, keys=lst_node_to, names=["Target node"])
+
     return counts
 
 
-def circuit_matrix_between_groups(circ, neuron_groups, connectome=LOCAL_CONNECTOME, extract_full=False, **kwargs):
-    node_lookup = _make_node_lookup(circ, neuron_groups)
+def circuit_matrix_between_groups(circ, neuron_groups, connectome=LOCAL_CONNECTOME,
+                                  extract_full=False, lst_values=None):
     conn_file = find_sonata_connectome(circ, connectome)
 
     if extract_full:
-        return connection_matrix_between_groups_partition(conn_file, node_lookup, **kwargs)
+        node_lookup = _make_node_lookup(circ, neuron_groups, lst_values=lst_values)
+        return connection_matrix_between_groups_partition(conn_file, node_lookup)
     else:
-        return connection_matrix_between_groups_partial(conn_file, node_lookup, **kwargs)
+        node_lookup = _make_node_lookup(circ, neuron_groups, lst_values=lst_values, fill_unused_gids=False)
+        return connection_matrix_between_groups_partial(conn_file, node_lookup)
