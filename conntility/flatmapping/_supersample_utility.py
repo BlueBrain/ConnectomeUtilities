@@ -4,22 +4,21 @@ from scipy.spatial.transform import Rotation
 
 
 def flat_coordinate_frame(coordinates3d, fm, grouped=False):
-    coords_flat = fm.lookup(coordinates3d.values)
-    coord_frame = pandas.DataFrame(coordinates3d, index=pandas.MultiIndex.from_tuples(map(tuple, coords_flat),
-                                                                                      names=["f_x", "f_y"]),
-                                 columns=["x", "y", "z"])
+    coords_flat = fm.lookup(coordinates3d)
+    midx = pandas.MultiIndex.from_frame(pandas.DataFrame(coords_flat, columns=["flat x", "flat y"]))
+    coord_frame = pandas.DataFrame(coordinates3d, index=midx, columns=["x", "y", "z"])
     if grouped:
-        return coord_frame.groupby(["f_x", "f_y"]).apply(lambda x: x.values)
+        return coord_frame.groupby(["flat x", "flat y"]).apply(lambda x: x.values)
     return coord_frame
 
 
 def neuron_flat_coordinate_frame(circ, fm, grouped=False):
     coordinates3d = circ.cells.get(properties=["x", "y", "z"])
-    coord_frame = flat_coordinate_frame(coordinates3d, fm)
+    coord_frame = flat_coordinate_frame(coordinates3d.values, fm)
     coord_frame["gid"] = coordinates3d.index.values
     if grouped:
-        A = coord_frame[["x", "y", "z"]].groupby(["f_x", "f_y"]).apply(lambda x: x.values)
-        B = coord_frame["gid"].groupby(["f_x", "f_y"]).apply(lambda x: x.values)
+        A = coord_frame[["x", "y", "z"]].groupby(["flat x", "flat y"]).apply(lambda x: x.values)
+        B = coord_frame["gid"].groupby(["flat x", "flat y"]).apply(lambda x: x.values)
         return A, B
     return coord_frame
 

@@ -5,10 +5,11 @@ from ...flatmapping import supersampled_neuron_locations
 
 def flat_neuron_locations(circ, fm=None):
     if fm is None:
-        fm = circ.atla.load_data("flatmap")
+        fm = circ.atlas.load_data("flatmap")
     xyz = circ.cells.get(properties=["x", "y", "z"])
     return pandas.DataFrame(fm.lookup(xyz.values),
-                            columns=["flat x", "flat y"])
+                            columns=["flat x", "flat y"],
+                            index=xyz.index)
 
 
 AVAILABLE_EXTRAS = {
@@ -18,6 +19,7 @@ AVAILABLE_EXTRAS = {
 
 
 def add_extra_properties(df_in, circ, lst_properties, fm=None):
+    lst_properties = list(lst_properties)
     for extra_fun, extra_props in AVAILABLE_EXTRAS.items():
         props = []
         for p in extra_props:
@@ -25,7 +27,7 @@ def add_extra_properties(df_in, circ, lst_properties, fm=None):
                 props.append(lst_properties.pop(lst_properties.index(p)))
         if len(props) > 0:
             new_df = extra_fun(circ, fm=fm)
-            df_in = pandas.concat([df_in, new_df[props]])
+            df_in = pandas.concat([df_in, new_df[props]], axis=1)
     if len(lst_properties) > 0:
         raise ValueError("Unknown properties: {0}".format(lst_properties))
     return df_in
