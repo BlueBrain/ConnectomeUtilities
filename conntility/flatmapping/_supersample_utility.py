@@ -4,7 +4,7 @@ from scipy.spatial.transform import Rotation
 
 
 def flat_coordinate_frame(coordinates3d, fm, grouped=False):
-    coords_flat = fm.lookup(coordinates3d)
+    coords_flat = fm.lookup(coordinates3d.values)
     coord_frame = pandas.DataFrame(coordinates3d, index=pandas.MultiIndex.from_tuples(map(tuple, coords_flat),
                                                                                       names=["f_x", "f_y"]),
                                  columns=["x", "y", "z"])
