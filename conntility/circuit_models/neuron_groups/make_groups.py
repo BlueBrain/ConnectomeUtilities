@@ -46,13 +46,11 @@ def group_by_binned_properties(df_in, lst_props, bins, prefix="binned-", replace
     return df_in
 
 
-def group_by_grid(df_in, radius, columns=None, shape="hexagonally", prefix="grid-", replace=True):
-    if columns is None:
-        columns = ["ss flat x", "ss flat y"]
-    assert len(columns) == 2, "Need one column as x-coordinate and one as y-coordinate"
+def group_by_grid(df_in, lst_props, radius, shape="hexagonally", prefix="grid-", replace=True):
+    assert len(lst_props) == 2, "Need one column as x-coordinate and one as y-coordinate"
     tritilling = TriTille(radius)
 
-    flat_locs = df_in[columns].rename(dict([(a, b) for a, b in zip(columns, ["x", "y"])]), axis=1)
+    flat_locs = df_in[lst_props].rename(dict([(a, b) for a, b in zip(lst_props, ["x", "y"])]), axis=1)
 
     hexmap = getattr(tritilling, "bin_" + shape)(flat_locs, use_columns_row_indexing=False)
     grid = tritilling.locate_grid(hexmap)
