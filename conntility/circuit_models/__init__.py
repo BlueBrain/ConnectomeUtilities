@@ -1,0 +1,4 @@
+from . import neuron_groups
+from .connection_matrix import connection_matrix_for_gids, connection_matrix_between_groups_partial, connection_matrix_between_groups_partition
+from .connection_matrix import circuit_connection_matrix, circuit_matrix_between_groups, circuit_group_matrices
+from .connection_matrix import full_connection_matrix
