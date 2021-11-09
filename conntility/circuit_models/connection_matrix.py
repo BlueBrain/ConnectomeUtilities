@@ -9,10 +9,14 @@ LOCAL_CONNECTOME = "local"
 STR_VOID = "VOID"
 
 
-def find_sonata_connectome(circ, connectome):
+def find_sonata_connectome(circ, connectome, return_sonata_file=True):
+    if return_sonata_file:
+        if connectome == LOCAL_CONNECTOME:
+            return circ.config["connectome"]
+        return circ.config["projections"][connectome]
     if connectome == LOCAL_CONNECTOME:
-        return circ.config["connectome"]
-    return circ.config["projections"][connectome]
+        return circ.connectome
+    return circ.projection[connectome]
 
 
 def full_connection_matrix(sonata_fn, n_neurons=None, chunk=50000000):
@@ -75,13 +79,14 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
 
 def _make_node_lookup(circ, neuron_groups, fill_unused_gids=True, lst_values=None):
     from .neuron_groups import flip
-    node_lookup = flip(neuron_groups, contract_values=True, categorical=True, lst_values=lst_values)
+    node_lookup = flip(neuron_groups, contract_values=True, lst_values=lst_values)
     if fill_unused_gids:
         all_gids = circ.cells.ids()
         missing_gids = numpy.setdiff1d(all_gids, node_lookup.index)
         node_lookup = pandas.concat([node_lookup,
                                      pandas.Series([STR_VOID] * len(missing_gids),
                                                    index=missing_gids)], axis=0)
+        node_lookup = pandas.Series(pandas.Categorical(node_lookup), index=node_lookup.index)
     return node_lookup
 
 
@@ -96,7 +101,7 @@ def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=500
     midxx = pandas.MultiIndex.from_tuples([], names=["Source node", "Target node"])
     counts = pandas.Series([], index=midxx, dtype=int)
 
-    for splt_fr, splt_to in tqdm(zip(splits[:-1], splits[1:]), desc="Counting...", total=len(splits) - 1):
+    for splt_fr, splt_to in tqdm.tqdm(zip(splits[:-1], splits[1:]), desc="Counting...", total=len(splits) - 1):
         son_idx_fr = h5['source_node_id'][splt_fr:splt_to]
         son_idx_to = h5['target_node_id'][splt_fr:splt_to]
         reg_fr = node_lookup[son_idx_fr + 1]
@@ -111,7 +116,7 @@ def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=500
     return counts
 
 
-def _pre_gids_for_post_gid(h5, post_gid):
+def _afferent_gids(h5, post_gid):
     rnge = h5["indices"]["target_to_source"]["node_id_to_ranges"][post_gid - 1]
     son_idx_fr = [h5["source_node_id"][r[0]:r[1]]
                   for r in h5["indices"]["target_to_source"]["range_to_edge_id"][rnge[0]:rnge[1]]]
@@ -121,21 +126,21 @@ def _pre_gids_for_post_gid(h5, post_gid):
 
 def connection_matrix_between_groups_partial(sonata_fn, node_lookup, **kwargs):
     # TODO: If the user accidently provides a "neuron_groups" instead of "node_lookup" input give helpful message
-    h5 = h5py.File(sonata_fn, "r")['edges/default']
-
     node_lookup = node_lookup[node_lookup != STR_VOID]
     gids_per_node = node_lookup.to_frame().groupby(node_lookup.name).apply(lambda x: x.index.values)
 
     lst_node_to = []
     lst_counts_from = []
-    for node_to, lst_post_gids in gids_per_node.items():
-        lst_pre_gids = [_pre_gids_for_post_gid(h5, post_gid) for post_gid in lst_post_gids]
-        lst_pre_gids = numpy.hstack(lst_pre_gids)
-        node_from = node_lookup[node_lookup.index.intersection(lst_pre_gids)]
-        counts_from = node_from.value_counts()
-        counts_from.index.name = "Source node"
-        lst_node_to.append(node_to)
-        lst_counts_from.append(counts_from)
+    with h5py.File(sonata_fn, "r")['edges/default'] as h5:
+        for node_to, lst_post_gids in tqdm.tqdm(gids_per_node.items(), total=len(gids_per_node)):
+            lst_pre_gids = [_afferent_gids(h5, post_gid) for post_gid in lst_post_gids]
+            lst_pre_gids = numpy.hstack(lst_pre_gids)
+            lst_pre_gids = lst_pre_gids[numpy.in1d(lst_pre_gids, node_lookup.index)]
+            node_from = node_lookup[lst_pre_gids]
+            counts_from = node_from.value_counts()
+            counts_from.index.name = "Source node"
+            lst_node_to.append(node_to)
+            lst_counts_from.append(counts_from)
     counts = pandas.concat(lst_counts_from, keys=lst_node_to, names=["Target node"])
 
     return counts
