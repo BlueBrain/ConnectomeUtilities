@@ -1,26 +1,39 @@
 import numpy
 import pandas
 from scipy.spatial.transform import Rotation
+from .flatmap_utility import apply_flatmap_with_translation
 
 
-def flat_coordinate_frame(coordinates3d, fm, grouped=False):
-    coords_flat = fm.lookup(coordinates3d)
-    midx = pandas.MultiIndex.from_frame(pandas.DataFrame(coords_flat, columns=["flat x", "flat y"]))
-    coord_frame = pandas.DataFrame(coordinates3d, index=midx, columns=["x", "y", "z"])
+COLS_FLAT_XY = ["flat x", "flat y"]
+COLS_XYZ = ["x", "y", "z"]
+
+
+def flat_multi_index(coordinates3d, fm, orientations3d=None):
+    coords_flat = apply_flatmap_with_translation(coordinates3d, orientations3d, fm)
+    midx = pandas.MultiIndex.from_frame(pandas.DataFrame(coords_flat, columns=COLS_FLAT_XY))
+    return midx
+
+
+def flat_coordinate_frame(coordinates3d, fm, orientations3d=None, grouped=False):
+    midx = flat_multi_index(coordinates3d, fm, orientations3d=orientations3d)
+    coord_frame = pandas.DataFrame(coordinates3d, index=midx, columns=COLS_XYZ)
     if grouped:
-        return coord_frame.groupby(["flat x", "flat y"]).apply(lambda x: x.values)
+        return coord_frame.groupby(COLS_FLAT_XY).apply(lambda x: x.values)
     return coord_frame
 
 
-def neuron_flat_coordinate_frame(circ, fm, grouped=False):
-    coordinates3d = circ.cells.get(properties=["x", "y", "z"])
-    coord_frame = flat_coordinate_frame(coordinates3d.values, fm)
-    coord_frame["gid"] = coordinates3d.index.values
+def pandas_flat_coordinate_frame(df_in, fm, columns_xyz=COLS_XYZ, columns_uvw=None, grouped=False):
+    xyz = df_in[columns_xyz].values
+    uvw = None
+    if columns_uvw is not None:
+        uvw = df_in[columns_uvw].values
+
+    midx = flat_multi_index(xyz, fm, orientations3d=uvw)
+    df_out = df_in.set_index(midx)
     if grouped:
-        A = coord_frame[["x", "y", "z"]].groupby(["flat x", "flat y"]).apply(lambda x: x.values)
-        B = coord_frame["gid"].groupby(["flat x", "flat y"]).apply(lambda x: x.values)
-        return A, B
-    return coord_frame
+        A = df_out[columns_xyz].groupby(COLS_FLAT_XY).apply(lambda x: x.values)
+        return A, df_out
+    return df_out
 
 
 def voxel_flat_coordinate_frame(fm, in_voxel_indices=False, grouped=False):

@@ -1,5 +1,10 @@
 import numpy
 
+from voxcell import VoxcellError
+
+FIX_TRANSITION = 1500  # In the SSCx Bio_M the projection fiber positions are defined at the start of the rays,
+# which are outside of Sirio's flatmap. They have to be shifted with 1500 (as of 11.2021) to get them into the flatmap.
+
 
 def colored_points_to_image(flat_coords, cols, extent=None):
     flat_coords = flat_coords.astype(int)
@@ -70,3 +75,41 @@ def flat_region_image(lst_regions, fm, *args, extent=None, subsample=None):
     region_lookup = numpy.argmax(numpy.dstack(counters), axis=2)
     region_lookup[numpy.sum(numpy.dstack(counters), axis=2) == 0] = -1
     return region_lookup
+
+
+def apply_flatmap_with_translation(xyz, uvw, fm, max_translation=2000):
+    """
+    Uses Voxcell to look up locations of `xyz` in the flatmap. If locations are outside the valid region of
+    the flatmap (which is usually the case for projections as those start at the bottom of L6)
+    and `uvw` is provided (i.e. not `None`), then there are 2 possible options:
+    1) The invalid locations are translated along the directions given by `uvw` by a hard-coded fix amount, or
+    2) The invalid locations are gradually translated along the directions given by `uvw` until they hit
+    the valid volume. `max_translation` defines the maximum amplitude of that translation.
+    Locations that never hit the valid volume will return a flat location of (-1, -1).
+    :param xyz: numpy.array, N x 3: coordinates in 3d space
+    :param uvw: numpy.array, N x 3: directions in 3d space. Optional, can be None.
+    :param fm: VoxelData: flatmap
+    :param max_translation: float.
+    :return: Flat locations of the xyz coordinates in the flatmap.
+    """
+    solution = fm.lookup(xyz)
+    if uvw is not None and not numpy.all(solution > 0):
+        # 1)
+        solution = fm.lookup(xyz + FIX_TRANSITION * uvw)
+        if numpy.all(solution > 0):
+            return solution
+        else:
+            # 2)
+            fac = 0
+            step = fm.voxel_dimensions[0] / 4
+            tl_factors = numpy.zeros((len(uvw), 1))
+            solution = fm.lookup(xyz)
+            while numpy.any(solution < 0) and fac < max_translation:
+                try:
+                    fac += step
+                    to_update = numpy.any(solution < 0, axis=1)
+                    tl_factors[to_update, 0] = fac
+                    solution[to_update, :] = fm.lookup(xyz[to_update, :] + tl_factors[to_update, :] * uvw[to_update, :])
+                except VoxcellError:
+                    break
+    return solution
