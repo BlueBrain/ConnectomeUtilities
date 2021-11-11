@@ -57,13 +57,12 @@ class LazyMatrix:
         return matrix
 
 
-def read_toc_plus_payload(path, for_step):
+def read_toc_plus_payload(path):
     path_hdf_store, group_identifier = path
     group_identifier_toc = group_identifier + "/toc"
 
     if not os.path.isfile(path_hdf_store):
-        raise RuntimeError(f"Missing HDF data for step {for_step} at path {path_hdf_store}\n"
-                           f"Run {for_step} step with config that sets outputs to HDF first.")
+        raise RuntimeError(f"Missing HDF data at path {path_hdf_store}\n")
 
     toc = pd.read_hdf(path_hdf_store, key=group_identifier_toc)
 

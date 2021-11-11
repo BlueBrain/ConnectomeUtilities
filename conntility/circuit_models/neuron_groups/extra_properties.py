@@ -2,38 +2,35 @@ import pandas
 import numpy
 
 from ...flatmapping import supersampled_locations, apply_flatmap_with_translation
-from .defaults import XYZ, UVW, GID, DEFAULT_PIXEL_SZ, FIBER_GID, SS_FLAT_FIBER, SS_FLAT_NEURON, FLAT_COORDINATES
-
-# TODO: All these functions assume you have already loaded x y z coordinates. should check that.
+from .defaults import XYZ, UVW, DEFAULT_PIXEL_SZ, SS_COORDINATES, FLAT_COORDINATES
 
 
-def supersampled_neuron_locations(df_in, circ=None, fm=None, orient=None, pixel_sz=DEFAULT_PIXEL_SZ):
-    return supersampled_locations(df_in, XYZ, circ=circ, fm=fm, orient=orient, pixel_sz=pixel_sz,
-                                  column_index=GID, columns_out=SS_FLAT_NEURON)
-
-
-def supersampled_fiber_locations(df_in, circ=None, fm=None, orient=None, pixel_sz=DEFAULT_PIXEL_SZ):
-    return supersampled_locations(df_in, XYZ, circ=circ, fm=fm, orient=orient, pixel_sz=pixel_sz,
-                                  column_index=FIBER_GID, columns_out=SS_FLAT_FIBER)
+def supersampled_locations_wrapper(df_in, circ=None, fm=None, orient=None, pixel_sz=DEFAULT_PIXEL_SZ):
+    assert numpy.all([col in df_in for col in XYZ]), "Must load base x, y, z coordinates first"
+    columns_uvw = None
+    if numpy.all([col in df_in for col in UVW]):
+        columns_uvw = UVW
+    return supersampled_locations(df_in, XYZ, columns_uvw=columns_uvw, circ=circ, fm=fm, orient=orient,
+                                  pixel_sz=pixel_sz, columns_out=SS_COORDINATES)
 
 
 def flat_locations(df_in, circ, fm=None):
+    assert numpy.all([col in df_in for col in XYZ]), "Must load base x, y, z coordinates first"
     if fm is None:
         fm = circ.atlas.load_data("flatmap")
-    xyz = df_in[XYZ]
+    xyz = df_in[XYZ].values
     uvw = None
     if numpy.all([x in df_in for x in UVW]):
-        uvw = df_in[UVW]
-    flat_coords = apply_flatmap_with_translation(xyz.values, uvw.values, fm)
+        uvw = df_in[UVW].values
+    flat_coords = apply_flatmap_with_translation(xyz, uvw, fm)
     return pandas.DataFrame(flat_coords,
                             columns=FLAT_COORDINATES,
-                            index=xyz.index)
+                            index=df_in.index)
 
 
 AVAILABLE_EXTRAS = {
     flat_locations: FLAT_COORDINATES,
-    supersampled_neuron_locations: SS_FLAT_NEURON,
-    supersampled_fiber_locations: SS_FLAT_FIBER
+    supersampled_locations_wrapper: SS_COORDINATES
 }
 
 

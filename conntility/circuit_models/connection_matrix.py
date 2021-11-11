@@ -81,21 +81,21 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
 
 def _make_node_lookup(circ, neuron_groups, fill_unused_gids=True):
     from .neuron_groups import flip
-    node_lookup = flip(neuron_groups, contract_values=True)
+    node_lookup = flip(neuron_groups, contract_values=True, categorical=~fill_unused_gids)
     if fill_unused_gids:
         all_gids = circ.cells.ids()
         missing_gids = numpy.setdiff1d(all_gids, node_lookup.index)
-        node_lookup = pandas.concat([node_lookup,
+        full_lookup = pandas.concat([node_lookup,
                                      pandas.Series([STR_VOID] * len(missing_gids),
                                                    index=missing_gids)], axis=0)
-        node_lookup = pandas.Series(pandas.Categorical(node_lookup), index=node_lookup.index)
+        node_lookup = pandas.Series(pandas.Categorical(full_lookup), index=node_lookup.index, name=node_lookup.name)
     return node_lookup
 
 
 def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=50000000):
     # TODO: If the user accidently provides a "neuron_groups" instead of "node_lookup" input give helpful message
     # TODO: Evaluate if it is necessary to fill node_lookup for unused gids with STR_VOID
-    h5 = h5py.File(sonata_fn, "r")['edges/default']
+    h5 = h5py.File(sonata_fn, "r")['edges/default']  # TODO: close file!
 
     dset_sz = h5['source_node_id'].shape[0]
     splits = numpy.arange(0, dset_sz + chunk, chunk)
@@ -120,6 +120,8 @@ def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=500
 
 def _afferent_gids(h5, post_gid):
     rnge = h5["indices"]["target_to_source"]["node_id_to_ranges"][post_gid - 1]
+    if rnge[1] == rnge[0]:
+        return numpy.array([])
     son_idx_fr = [h5["source_node_id"][r[0]:r[1]]
                   for r in h5["indices"]["target_to_source"]["range_to_edge_id"][rnge[0]:rnge[1]]]
     son_idx_fr = numpy.hstack(son_idx_fr) + 1
@@ -133,7 +135,8 @@ def connection_matrix_between_groups_partial(sonata_fn, node_lookup, **kwargs):
 
     lst_node_to = []
     lst_counts_from = []
-    with h5py.File(sonata_fn, "r")['edges/default'] as h5:
+    with h5py.File(sonata_fn, "r") as h5_file:
+        h5 = h5_file['edges/default']
         for node_to, lst_post_gids in tqdm.tqdm(gids_per_node.items(), total=len(gids_per_node)):
             lst_pre_gids = [_afferent_gids(h5, post_gid) for post_gid in lst_post_gids]
             lst_pre_gids = numpy.hstack(lst_pre_gids)

@@ -4,6 +4,7 @@ from ._supersample_utility import _find_rotation_
 
 
 DEFAULT_COLUMNS = ["x", "y"]
+TMP_INDEX = "__index__"
 
 
 def per_pixel_coordinate_transformation(fm, orient, from_system="global", to_system="rotated"):
@@ -120,6 +121,10 @@ def supersampled_locations(df_in, columns_xyz, columns_uvw=None, columns_out=DEF
         orient = circ.atlas.load_data("orientation")
     if pixel_sz is None:
         pixel_sz = estimate_flatmap_pixel_size(fm, orient)
+    if column_index is None:
+        index_frame = df_in.index.to_frame(name=TMP_INDEX)
+        df_in = pandas.concat([df_in, index_frame], axis=1)
+        column_index = TMP_INDEX
 
     loc_frame, df_with_midx = pandas_flat_coordinate_frame(df_in, fm,
                                                            columns_xyz=columns_xyz, columns_uvw=columns_uvw,
@@ -130,10 +135,8 @@ def supersampled_locations(df_in, columns_xyz, columns_uvw=None, columns_out=DEF
     res = tf[idxx].combine(loc_frame[idxx], lambda a, b: a.apply(b))
     final = res.index.to_series().combine(res, lambda a, b: numpy.array(a) * pixel_sz + b)
     final_frame = numpy.vstack(final.values)
-    if column_index is None:
-        index = pandas.RangeIndex(final_frame.shape[0])
-    else:
-        index = df_with_midx[column_index][idxx].values
+
+    index = df_with_midx[column_index][idxx].values
     out = pandas.DataFrame(final_frame,
                            columns=columns_out,
                            index=index)  # TODO: check that this index is in the right order

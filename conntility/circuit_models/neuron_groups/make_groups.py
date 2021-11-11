@@ -8,7 +8,7 @@ def group_by_properties(df_in, lst_props, prefix="idx-", replace=True):
     vals = df_in[lst_props]
     vals.columns = [prefix + col for col in vals.columns]
     if not replace:
-        vals = pandas.concat([df_in.index.to_frame(), vals])
+        vals = pandas.concat([df_in.index.to_frame(), vals], axis=1)
 
     df_in = df_in.set_index(pandas.MultiIndex.from_frame(vals)).sort_index()
     return df_in
@@ -27,7 +27,7 @@ def group_by_binned_properties(df_in, lst_props, bins, prefix="binned-", replace
     binned_vals.columns = [prefix + col for col in binned_vals.columns]
 
     if not replace:
-        binned_vals = pandas.concat([df_in.index.to_frame(), binned_vals])
+        binned_vals = pandas.concat([df_in.index.to_frame(), binned_vals], axis=1)
 
     df_in = df_in.set_index(pandas.MultiIndex.from_frame(binned_vals)).sort_index()
     return df_in
