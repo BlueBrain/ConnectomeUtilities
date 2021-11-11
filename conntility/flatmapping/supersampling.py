@@ -3,7 +3,7 @@ from ._supersample_utility import *
 from ._supersample_utility import _find_rotation_
 
 
-DEFAULT_SS_COLUMNS = ["ss flat x", "ss flat y"]
+DEFAULT_COLUMNS = ["x", "y"]
 
 
 def per_pixel_coordinate_transformation(fm, orient, from_system="global", to_system="rotated"):
@@ -109,8 +109,9 @@ def supersample_flatmap(fm, orient, pixel_sz=34.0):
     return voxcell.VoxelData(out_raw, fm.voxel_dimensions, offset=fm.offset)
 
 
-def supersampled_locations(df_in, columns_xyz, circ=None, fm=None, orient=None, pixel_sz=34.0,
-                           col_index=None, cols_out=DEFAULT_SS_COLUMNS):
+def supersampled_locations(df_in, columns_xyz, columns_uvw=None, columns_out=DEFAULT_COLUMNS,
+                           circ=None, fm=None, orient=None, pixel_sz=34.0,
+                           column_index=None):
     if circ is None:
         assert fm is not None and orient is not None, "Must provide circuit or flatmap and orientation atlas!"
     if fm is None:
@@ -119,23 +120,21 @@ def supersampled_locations(df_in, columns_xyz, circ=None, fm=None, orient=None, 
         orient = circ.atlas.load_data("orientation")
     if pixel_sz is None:
         pixel_sz = estimate_flatmap_pixel_size(fm, orient)
-    cols_use = columns_xyz.copy()
-    if col_index is not None:
-        cols_use.append(col_index)
 
-    loc_frame, df_with_midx = pandas_flat_coordinate_frame(df_in[cols_use], fm,
-                                                           columns_xyz=columns_xyz, grouped=True)
+    loc_frame, df_with_midx = pandas_flat_coordinate_frame(df_in, fm,
+                                                           columns_xyz=columns_xyz, columns_uvw=columns_uvw,
+                                                           grouped=True)
     tf = per_pixel_coordinate_transformation(fm, orient, to_system="subpixel")
     idxx = loc_frame.index.intersection(tf.index)
 
     res = tf[idxx].combine(loc_frame[idxx], lambda a, b: a.apply(b))
     final = res.index.to_series().combine(res, lambda a, b: numpy.array(a) * pixel_sz + b)
     final_frame = numpy.vstack(final.values)
-    if col_index is None:
+    if column_index is None:
         index = pandas.RangeIndex(final_frame.shape[0])
     else:
-        index = df_with_midx[col_index][idxx].values
+        index = df_with_midx[column_index][idxx].values
     out = pandas.DataFrame(final_frame,
-                           columns=cols_out,
+                           columns=columns_out,
                            index=index)  # TODO: check that this index is in the right order
     return out

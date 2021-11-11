@@ -4,6 +4,7 @@ import tqdm
 import pandas
 from scipy import sparse
 
+from .neuron_groups.defaults import GID
 
 LOCAL_CONNECTOME = "local"
 STR_VOID = "VOID"
@@ -28,7 +29,7 @@ def full_connection_matrix(sonata_fn, n_neurons=None, chunk=50000000):
     A = numpy.zeros(dset_sz, dtype=int)
     B = numpy.zeros(dset_sz, dtype=int)
     splits = numpy.arange(0, dset_sz + chunk, chunk)
-    for splt_fr, splt_to in tqdm(zip(splits[:-1], splits[1:]), total=len(splits) - 1):
+    for splt_fr, splt_to in tqdm.tqdm(zip(splits[:-1], splits[1:]), total=len(splits) - 1):
         A[splt_fr:splt_to] = h5['source_node_id'][splt_fr:splt_to]
         B[splt_fr:splt_to] = h5['target_node_id'][splt_fr:splt_to]
     M = sparse.coo_matrix((numpy.ones_like(A, dtype=bool), (A, B)), shape=n_neurons)
@@ -43,7 +44,7 @@ def connection_matrix_for_gids(sonata_fn, gids):
 
     indices = []
     indptr = [0]
-    for id_post in tqdm(idx):
+    for id_post in tqdm.tqdm(idx):
         ids_pre = []
         ranges = h5['indices']['target_to_source']['node_id_to_ranges'][id_post, :]
         for block in h5['indices']['target_to_source']['range_to_edge_id'][ranges[0]:ranges[1], :]:
@@ -66,7 +67,8 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
 
 def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, extract_full=False, **kwargs):
     if isinstance(neuron_groups, pandas.DataFrame):
-        neuron_groups = neuron_groups["gid"]
+        neuron_groups = neuron_groups[GID]
+    neuron_groups = neuron_groups.groupby(neuron_groups.index.names)
     if not extract_full:
         matrices = neuron_groups.apply(lambda grp: circuit_connection_matrix(circ, connectome=connectome,
                                                                              for_gids=grp.values, **kwargs))

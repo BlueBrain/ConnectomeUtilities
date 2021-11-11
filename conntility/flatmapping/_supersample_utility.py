@@ -4,6 +4,7 @@ from scipy.spatial.transform import Rotation
 from .flatmap_utility import apply_flatmap_with_translation
 
 
+# The below are just used internally in this package. Not quite redundant with the stuff in neuron_groups.defaults...
 COLS_FLAT_XY = ["flat x", "flat y"]
 COLS_XYZ = ["x", "y", "z"]
 
