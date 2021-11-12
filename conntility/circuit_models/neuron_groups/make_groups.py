@@ -2,7 +2,7 @@ import numpy
 import pandas
 
 from .tessellate import TriTille
-
+from .defaults import GID
 
 def group_by_properties(df_in, lst_props, prefix="idx-", replace=True):
     vals = df_in[lst_props]
@@ -57,7 +57,7 @@ def group_by_grid(df_in, lst_props, radius, shape="hexagonally", prefix="grid-",
     return df_in
 
 
-def flip(df_in, lst_values=None, index="gid", contract_values=False, categorical=False):
+def flip(df_in, lst_values=None, index=GID, contract_values=False, categorical=False):
     if isinstance(df_in, pandas.DataFrame):
         df_in = df_in[index]
     idx_frame = df_in.index.to_frame()
@@ -75,3 +75,16 @@ def flip(df_in, lst_values=None, index="gid", contract_values=False, categorical
         return idx_series
     return idx_frame
 
+
+def count_overlap(df_one, df_two, in_column=GID):
+    def prepare_overlap(df_pre):
+        def execute_overlap(df_post):
+            return len(numpy.intersect1d(df_pre[in_column], df_post[in_column]))
+
+        return execute_overlap
+
+    res = df_one.groupby(df_one.index.names).apply(
+        lambda df_pre:
+        df_two.groupby(df_two.index.names).apply(prepare_overlap(df_pre))
+    )
+    return res

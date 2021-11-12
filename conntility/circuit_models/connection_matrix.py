@@ -36,15 +36,18 @@ def full_connection_matrix(sonata_fn, n_neurons=None, chunk=50000000):
     return M.tocsr()
 
 
-def connection_matrix_for_gids(sonata_fn, gids):
-    # TODO: Separate gids_pre, gids_post
+def connection_matrix_for_gids(sonata_fn, gids, gids_post=None):
     idx = numpy.array(gids) - 1  # From gids to sonata "node" indices (base 0 instead of base 1)
     h5 = h5py.File(sonata_fn, "r")['edges/default']  # TODO: Instead of hard coding "default" that could be a config parameter
+    if gids_post is None:
+        gids_post = gids
+    idx_post = numpy.array(gids_post) - 1
     N = len(gids)
+    M = len(gids_post)
 
     indices = []
     indptr = [0]
-    for id_post in tqdm.tqdm(idx):
+    for id_post in tqdm.tqdm(idx_post):
         ids_pre = []
         ranges = h5['indices']['target_to_source']['node_id_to_ranges'][id_post, :]
         for block in h5['indices']['target_to_source']['range_to_edge_id'][ranges[0]:ranges[1], :]:
@@ -53,16 +56,16 @@ def connection_matrix_for_gids(sonata_fn, gids):
             row_ids = numpy.nonzero(numpy.in1d(idx, numpy.hstack(ids_pre)))[0]
             indices.extend(row_ids)
         indptr.append(len(indices))
-    mat = sparse.csc_matrix((numpy.ones(len(indices), dtype=bool), indices, indptr), shape=(N, N))
+    mat = sparse.csc_matrix((numpy.ones(len(indices), dtype=bool), indices, indptr), shape=(N, M))
     return mat
 
 
-def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, chunk=50000000):
+def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, for_gids_post=None, chunk=50000000):
     conn_file = find_sonata_connectome(circ, connectome)
     N = circ.cells.count()
     if for_gids is None:
         return full_connection_matrix(conn_file, n_neurons=N, chunk=chunk)
-    return connection_matrix_for_gids(conn_file, for_gids)
+    return connection_matrix_for_gids(conn_file, for_gids, gids_post=for_gids_post)
 
 
 def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, extract_full=False, **kwargs):
@@ -77,6 +80,26 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
         full_matrix = circuit_connection_matrix(circ, connectome=connectome, **kwargs)
         matrices = neuron_groups.apply(lambda grp: full_matrix[numpy.ix_(grp.values - 1, grp.values - 1)])
     return matrices
+
+
+def circuit_cross_group_matrices(circ, neuron_groups_pre, neuron_groups_post, connectome=LOCAL_CONNECTOME,
+                                 extract_full=False, column_gid=GID, **kwargs):
+    if extract_full:
+        raise NotImplementedError()
+
+    def prepare_con_mat(df_pre):
+        def execute_con_mat(df_post):
+            return circuit_connection_matrix(circ, for_gids=df_pre[column_gid].values,
+                                             for_gids_post=df_post[column_gid].values,
+                                             connectome=connectome)
+
+        return execute_con_mat
+
+    res = neuron_groups_pre.groupby(neuron_groups_pre.index.names).apply(
+        lambda df_pre:
+        neuron_groups_post.groupby(neuron_groups_post.index.names).apply(prepare_con_mat(df_pre))
+    )
+    return res
 
 
 def _make_node_lookup(circ, neuron_groups, fill_unused_gids=True):
