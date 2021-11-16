@@ -11,7 +11,7 @@ def supersampled_locations_wrapper(df_in, circ=None, fm=None, orient=None, pixel
     if numpy.all([col in df_in for col in UVW]):
         columns_uvw = UVW
     return supersampled_locations(df_in, XYZ, columns_uvw=columns_uvw, circ=circ, fm=fm, orient=orient,
-                                  pixel_sz=pixel_sz, columns_out=SS_COORDINATES)
+                                  pixel_sz=pixel_sz, columns_out=SS_COORDINATES, include_depth=True)
 
 
 def flat_locations(df_in, circ, fm=None):

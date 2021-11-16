@@ -85,7 +85,18 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
 def circuit_cross_group_matrices(circ, neuron_groups_pre, neuron_groups_post, connectome=LOCAL_CONNECTOME,
                                  extract_full=False, column_gid=GID, **kwargs):
     if extract_full:
-        raise NotImplementedError()
+        full_matrix = circuit_connection_matrix(circ, connectome=connectome, **kwargs)
+
+        def prepare_indexing(df_pre):
+            def index_submat(df_post):
+                return full_matrix[numpy.ix_(df_pre[column_gid].values - 1, df_post[column_gid].values - 1)]
+            return index_submat
+
+        res = neuron_groups_pre.groupby(neuron_groups_pre.index.names).apply(
+            lambda df_pre:
+            neuron_groups_post.groupby(neuron_groups_post.index.names).apply(prepare_indexing(df_pre))
+        )
+        return res
 
     def prepare_con_mat(df_pre):
         def execute_con_mat(df_post):
