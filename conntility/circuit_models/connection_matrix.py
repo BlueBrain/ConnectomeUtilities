@@ -99,10 +99,18 @@ def circuit_cross_group_matrices(circ, neuron_groups_pre, neuron_groups_post, co
         return res
 
     def prepare_con_mat(df_pre):
+        _connectome = connectome
+        if connectome is None:  # Fallback
+            from .neuron_groups.defaults import PROJECTION
+            assert PROJECTION in df_pre.index.names
+            tmp = df_pre.index.to_frame()[PROJECTION].unique()
+            assert len(tmp) == 1
+            _connectome = tmp[0]
+
         def execute_con_mat(df_post):
             return circuit_connection_matrix(circ, for_gids=df_pre[column_gid].values,
                                              for_gids_post=df_post[column_gid].values,
-                                             connectome=connectome)
+                                             connectome=_connectome)
 
         return execute_con_mat
 
