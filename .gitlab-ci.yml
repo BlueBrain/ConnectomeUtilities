@@ -8,9 +8,16 @@ test-job:
     - bb5_map
   stage: test
   before_script:
-    - module load unstable python py-bluepy
-    - pip install pytest
+    - module load unstable python py-bluepy py-virtualenv
+    - section_start section_venv[collapsed=true] "Setting up the virtual env"
+    - CI_VENV="$(pwd)/venv"
+    - rm -rf "$CI_VENV"
+    - python -mvenv "$CI_VENV"
+    - source "$CI_VENV/bin/activate"
+    - python -mpip install --upgrade pip setuptools wheel
+    - python -mpip install --upgrade pytest
+    - section_end section_venv
   script:
     - echo "Trying to launch pytest..."
-    - pytest
+    - python -mpytest
 
