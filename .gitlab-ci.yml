@@ -6,6 +6,8 @@ build-job:
 test-job:
   tags:
     - bb5_user
+  variables:
+    bb5_account: proj83
   stage: test
   before_script:
     - module load unstable python py-bluepy py-virtualenv
