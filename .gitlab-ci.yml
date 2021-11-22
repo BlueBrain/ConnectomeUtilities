@@ -5,7 +5,7 @@ build-job:
 
 test-job:
   tags:
-    - bb5_map
+    - bb5_user
   stage: test
   before_script:
     - module load unstable python py-bluepy py-virtualenv
