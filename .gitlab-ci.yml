@@ -1,0 +1,15 @@
+build-job:
+  stage: build
+  script:
+    - echo "Hello, $GITLAB_USER_LOGIN!"
+
+test-job:
+  tags:
+    - bb5_map
+  stage: test
+  before_script:
+    - module load unstable python py-bluepy
+  script:
+    - echo "Trying to launch pytest..."
+    - pytest
+
