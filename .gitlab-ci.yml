@@ -15,6 +15,7 @@ test-job:
     - source "$CI_VENV/bin/activate"
     - python -mpip install --upgrade pip setuptools wheel
     - python -mpip install --upgrade pytest
+    - python -mpip install .
   script:
     - echo "Trying to launch pytest..."
     - python -mpytest
