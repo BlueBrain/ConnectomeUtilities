@@ -1,5 +1,4 @@
-"""Tilings of a 2D plane.
-"""
+# Functionality for tiling locations in a plane
 import logging
 
 import pandas as pd

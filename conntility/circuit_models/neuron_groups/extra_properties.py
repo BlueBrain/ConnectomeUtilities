@@ -1,3 +1,5 @@
+# Functionality for adding additional columns to the DataFrame holding neuron information
+# That is: information that is not already easily available using Circuit.cells.get
 import pandas
 import numpy
 
@@ -6,6 +8,23 @@ from .defaults import XYZ, UVW, DEFAULT_PIXEL_SZ, SS_COORDINATES, FLAT_COORDINAT
 
 
 def supersampled_locations_wrapper(df_in, circ=None, fm=None, orient=None, pixel_sz=DEFAULT_PIXEL_SZ):
+    """
+    Wraps the lookup of supersampled flat locations and depth of fibers and neurons. Can be used for
+    both fiber and neuron locations.
+    Input:
+    df_in (pandas.DataFrame): Holds already loaded information on neurons or fibers. Must contain at
+    least three columns with x, y and z coordinates. If it also contains u, v, w columns, they may be
+    used to translate x, y, z locations into the flat mapped volume (required for fibers).
+    fm (str, optional): Path to flatmap file to use
+    orient (str, optional): Path to orientation volume to use
+    circ (bluepy.Circuit, optional): Can be provided instead of fm and orient. In that case flatmap and
+    orientation are loaded from Circuit.atlas
+    pixel_sz (float): Assumed approximate size in um of a single flatmap pixel. If set to None, an 
+    approximate value will be estimated
+
+    Returns:
+    a copy of df_in with two additional columns holding the supersampled flat coordinates and depth
+    """
     assert numpy.all([col in df_in for col in XYZ]), "Must load base x, y, z coordinates first"
     columns_uvw = None
     if numpy.all([col in df_in for col in UVW]):
@@ -15,6 +34,16 @@ def supersampled_locations_wrapper(df_in, circ=None, fm=None, orient=None, pixel
 
 
 def flat_locations(df_in, circ, fm=None):
+    """
+    Adds simple flatmapped locations to a DataFrame holding neuron information.
+    Input:
+    df_in (pandas.DataFrame): Holds already loaded information on neurons or fibers. Must contain at
+    least three columns with x, y and z coordinates. If it also contains u, v, w columns, they may be
+    used to translate x, y, z locations into the flat mapped volume (required for fibers).
+    fm (str, optional): Path to flatmap file to use
+    circ (bluepy.Circuit): Can be provided instead of fm. In that case flatmap is loaded from
+    Circuit.atlas. If fm is provided, then circ can be None.
+    """
     assert numpy.all([col in df_in for col in XYZ]), "Must load base x, y, z coordinates first"
     if fm is None:
         fm = circ.atlas.load_data("flatmap")
@@ -35,6 +64,28 @@ AVAILABLE_EXTRAS = {
 
 
 def add_extra_properties(df_in, circ, lst_properties, fm=None):
+    """
+    Adds additional properties (like flat loactions) to a DataFrame holding neuron or fiber information. 
+    List of available properties:
+    flat_x: Flat mapped x coordinate (pixel resolution)
+    flat_y: Flat mapped y coordinate (pixel resolution)
+    ss_flat_x: Supersampled flat mapped x coordinate (approximately in um)
+    ss_flat_y: Supersampled flat mapped y coordinate (approximately in um)
+    depth: Approximate cortical depth of a neuron in um
+
+    Input:
+    df_in (pandas.DataFrame): Holds already loaded information on neurons or fibers. Must contain at
+    least three columns with x, y and z coordinates. If it also contains u, v, w columns, they may be
+    used to translate x, y, z locations into the flat mapped volume (required for fibers).
+    lst_properties (list-like): List of properties to add. For available properties: see above.
+    circ (bluepy.Circuit): Circuit that the neurons or fibers originate from. Must have a "orientation"
+    atlas in Circuit.atlas!
+    fm (str, optional): Path to flat map file to use. If not provided, then circ must have a "flatmap"
+    atlas in Circuit.atlas!
+
+    Returns:
+    a copy of df_in with additional columns holding the specified additional properties.
+    """
     lst_properties = list(lst_properties)
     for extra_fun, extra_props in AVAILABLE_EXTRAS.items():
         props = []
