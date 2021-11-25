@@ -22,6 +22,8 @@ def group_with_config(df_in, cfg_or_dict):
 
     is_first = True
     for grouping in cfg:
+        if not "method" in grouping:
+            continue
         func = make_groups.__dict__.get(grouping["method"])
         if func is None:
             raise ValueError("Unknown grouping method: {0}".format(grouping["method"]))
@@ -40,6 +42,8 @@ def filter_with_config(df_in, cfg_or_dict):
     
     valid = numpy.ones(len(df_in), dtype=bool)
     for rule in cfg:
+        if not "column" in rule:
+            continue
         col = df_in[rule["column"]]
         if "values" in rule:
             valid = valid & numpy.in1d(col, rule["values"])
@@ -65,11 +69,21 @@ def load_with_config(circ, cfg_or_dict):
     
 
 def load_group_filter(circ, cfg_or_dict):
+    cfg_or_dict = cfg_or_dict or {}
     ret = filter_with_config(
         group_with_config(
             load_with_config(circ, cfg_or_dict),
             cfg_or_dict
         ),
+        cfg_or_dict
+    )
+    return ret
+
+
+def load_filter(circ, cfg_or_dict):
+    cfg_or_dict = cfg_or_dict or {}
+    ret = filter_with_config(
+        load_with_config(circ, cfg_or_dict),
         cfg_or_dict
     )
     return ret
