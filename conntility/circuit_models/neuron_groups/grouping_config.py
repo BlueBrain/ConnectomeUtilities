@@ -7,7 +7,7 @@ def _read_if_needed(cfg_or_dict):
     if isinstance(cfg_or_dict, str):
         import json
         with open(cfg_or_dict, "r") as fid:
-            cfg = json.load(cfg_or_dict)
+            cfg = json.load(fid)
     else:
         cfg = cfg_or_dict
     return cfg
@@ -29,7 +29,7 @@ def group_with_config(df_in, cfg_or_dict):
             raise ValueError("Unknown grouping method: {0}".format(grouping["method"]))
         df_in = func(df_in, grouping["columns"], *grouping.get("args", []), replace=is_first,
                      **grouping.get("kwargs", {}))
-        is_first = True
+        is_first = False
     return df_in
 
 def filter_with_config(df_in, cfg_or_dict):

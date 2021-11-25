@@ -1,0 +1,31 @@
+{
+    "loading": {
+        "base_target": "central_column_4_region_700um", 
+        "properties": ["x", "y", "z", "etype", "mtype", "layer", "ss_flat_x", "ss_flat_y"]
+        },
+    "filtering": [
+        {
+            "column": "etype",
+            "values": ["bNAC", "cNAC"]
+        },
+        {
+            "column": "layer",
+            "value": 1
+        },
+        {
+            "column": "ss_flat_x",
+            "interval": [1000, 1500]
+        }
+    ],
+    "grouping": [
+        {
+            "method": "group_by_grid",
+            "columns": ["ss_flat_x", "ss_flat_y"],
+            "args": [100]
+        },
+        {
+            "method": "group_by_properties",
+            "columns": ["mtype"]
+        }
+    ]
+}

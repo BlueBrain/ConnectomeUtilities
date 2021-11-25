@@ -18,3 +18,13 @@ def test_load_neurons():
     cmp = nrn["etype"].value_counts()
     reference = pandas.read_json(os.path.join(TEST_DATA_DIR, "reference_load_neurons.json"), orient="index")
     assert (reference[0] == cmp).all()
+
+
+def test_load_config_and_flatmapping():
+    load_cfg = os.path.join(TEST_DATA_DIR, "test_load_config.json")
+    nrn = test_module.load_group_filter(CIRC, load_cfg)
+
+    assert len(nrn.index.names) == 3
+    assert len(nrn) > 1000
+    assert len(nrn) < 2000  # Actual value: 1242. But since we don't control the circuit, add buffer.
+    assert len(nrn.groupby(nrn.index.names)) > 150
