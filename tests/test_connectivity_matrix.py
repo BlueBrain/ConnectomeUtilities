@@ -86,3 +86,11 @@ def test_connectivity_matrix_edge_indexing():
     numpy.random.seed(123)
     M.add_edge_property("for_testing", numpy.random.rand(len(M._edges)))
     assert M.default("for_testing").filter().lt(0.5).matrix.nnz == 3
+
+
+def test_load_save():
+    M = test_module.ConnectivityMatrix(m_sparse, vertex_properties=props)
+    M.to_h5("test.h5", group_name="test_group", prefix="test_matrix")
+    N = test_module.ConnectivityMatrix.from_h5("test.h5", group_name="test_group",
+    prefix="test_matrix")
+    assert (M.array == N.array).all()
