@@ -6,6 +6,7 @@ last modified: 12.2020
 """
 
 import h5py
+from numpy.core.numeric import indices
 from tqdm import tqdm
 from scipy import sparse
 import numpy as np
@@ -122,23 +123,31 @@ class ConnectivityMatrix(object):
                  edge_properties=None, default_edge_property='data', shape=None):
         """Not too intuitive init - please see `from_bluepy()` below"""
         """Initialization 1: By adjacency matrix"""
-        if isinstance(args[0], np.ndarray) or isinstance(args[0], sparse.spmatrix):
+        if len(args) == 1:
+            assert isinstance(args[0], np.ndarray) or isinstance(args[0], sparse.spmatrix)
             m = args[0]
             assert m.ndim == 2
-            m = sparse.coo_matrix(m)
+            if isinstance(args[0], sparse.spmatrix):
+                m = m.tocsc()  # Does not copy data if it already is csc
+            else:
+                m = sparse.csc_matrix(m)
             self._edges = pandas.DataFrame({
-                'row': m.row,
-                'col': m.col,
                 'data': m.data
             })
             if shape is None:
                 shape = m.shape
-        """Initialization 2: By edge-specific DataFrames"""
-        if isinstance(args[0], pandas.DataFrame):
-            assert 'row' in args[0] and 'col' in args[0]
-            self._edges = args[0]
-            if shape is None:
-                shape = (np.max(self._edges['row']), np.max(self._edges['col']))
+            
+            m.data = np.arange(len(m.data))
+            self._index_mat = m
+        else:
+            """Initialization 2: By edge-specific DataFrames"""
+            assert edge_properties is not None
+            indices, indptr = args
+            assert len(edge_properties) == len(indices)
+            self._index_mat = sparse.csc_matrix((np.arange(len(indices)), indices, indptr),
+                                                copy=False, shape=shape)
+            shape = self._index_mat.shape
+            self._edges = pandas.DataFrame({})
 
         # In the future: implement the ability to represent connectivity from population A to B.
         # For now only connectivity within one and the same population
@@ -189,11 +198,14 @@ class ConnectivityMatrix(object):
     
     def add_edge_property(self, new_label, new_values):
         if (isinstance(new_values, np.ndarray) and new_values.ndim == 2) or isinstance(new_values, sparse.spmatrix):
-            new_values = sparse.coo_matrix(new_values)
-            assert np.all(new_values.row == self._edges['row']) and np.all(new_values.col == self._edges['col'])
+            if isinstance(new_values, sparse.spmatrix):
+                new_values = new_values.tocsc()  # Does not copy data if it already is csc
+            else:
+                new_values = sparse.csc_matrix(new_values)
+            assert np.all(new_values.indices == self._index_mat.indices) and np.all(new_values.indptr == self._index_mat.indptr)
             self._edges[new_label] = new_values.data
         else:
-            assert len(new_values) == len(self._edges)
+            assert len(new_values) == len(self._index_mat.indices)
             self._edges[new_label] = new_values
 
     def __make_lookup__(self):
@@ -202,8 +214,8 @@ class ConnectivityMatrix(object):
     def matrix_(self, edge_property=None):
         if edge_property is None:
             edge_property = self._default_edge
-        return sparse.coo_matrix((self._edges[edge_property], (self._edges['row'], self._edges['col'])),
-                                 shape=self._shape)
+        return sparse.csc_matrix((self._edges[edge_property], self._index_mat.indices, self._index_mat.indptr),
+                                 shape=self._shape, copy=False)
 
     @property
     def edge_properties(self):
@@ -243,7 +255,9 @@ class ConnectivityMatrix(object):
 
     def default(self, new_default_property):
         assert new_default_property in self.edge_properties, "Edge property {0} unknown!".format(new_default_property)
-        return ConnectivityMatrix(self._edges, vertex_properties=self._vertex_properties, shape=self._shape,
+        return ConnectivityMatrix(self._index_mat.indices, self._index_mat.indptr,
+                                  edge_properties=self._edges,
+                                  vertex_properties=self._vertex_properties, shape=self._shape,
                                   default_edge_property=new_default_property)
 
     @staticmethod
@@ -257,7 +271,8 @@ class ConnectivityMatrix(object):
         """
         BlueConfig based constructor
         :param blueconfig_path: path to BlueConfig
-        :param gids: array of gids AKA. the nodes of the graph, if None - all excitatory gids from the circuit are used
+        :param load_config: A 
+        :param gids: array of gids AKA. the nodes of the graph, if None - all neurons in the circuit are used
         """
         from .circuit_models.neuron_groups import load_filter
         from .circuit_models import circuit_connection_matrix
@@ -283,7 +298,7 @@ class ConnectivityMatrix(object):
         population
         :return: the adjacency submatrix of the specified population(s).
         """
-        m = self.matrix_(edge_property=edge_property).tocsc()
+        m = self.matrix_(edge_property=edge_property)
         if sub_gids_post is not None:
             return m[np.ix_(self._lookup[self.__extract_vertex_ids__(sub_gids)],
                             self._lookup[self.__extract_vertex_ids__(sub_gids_post)])]
@@ -296,37 +311,39 @@ class ConnectivityMatrix(object):
     def subarray(self, sub_gids, edge_property=None, sub_gids_post=None):
         return np.array(self.dense_submatrix(sub_gids, edge_property=edge_property, sub_gids_post=sub_gids_post))
 
-    def subpopulation(self, subpop_ids, copy=True):
+    def subpopulation(self, subpop_ids):
         """A ConnectivityMatrix object representing the specified subpopulation"""
-        subpop_ids = self.__extract_vertex_ids__(subpop_ids)
-        if not copy:
-            #  TODO: Return a view on this object
-            raise NotImplementedError()
         assert np.all(np.in1d(subpop_ids, self._vertex_properties.index.values))
+        subpop_ids = self.__extract_vertex_ids__(subpop_ids)
+        subpop_idx = self._lookup[subpop_ids]
 
-        tmp_submat = self.submatrix(subpop_ids).tocoo()
-        out_edges = {'row': tmp_submat.row, 'col': tmp_submat.col}
-        for edge_prop in self.edge_properties:
-            if edge_prop not in ['row', 'col']:
-                out_edges[edge_prop] = self.submatrix(subpop_ids, edge_property=edge_prop).data
-        out_edges = pandas.DataFrame(out_edges)
+        subindex = self._index_mat[np.ix_(subpop_idx, subpop_idx)]
+        out_edges = self._edges.iloc[subindex.data]
         out_vertices = self._vertex_properties.loc[subpop_ids]
-        return ConnectivityMatrix(out_edges, vertex_properties=out_vertices, shape=(len(subpop_ids), len(subpop_ids)),
-                                  default_edge_property=self._default_edge)
+        return ConnectivityMatrix(subindex.indices, subindex.indptr, vertex_properties=out_vertices,
+                                  edge_properties=out_edges, default_edge_property=self._default_edge,
+                                  shape=(len(subpop_ids), len(subpop_ids)))
 
-    def subedges(self, subedge_indices, copy=True):
+    def subedges(self, subedge_indices):
         """A ConnectivityMatrix object representing the specified subpopulation"""
-        if not copy:
-            #  TODO: Return a view on this object
-            raise NotImplementedError()
+        row_indices = self._index_mat.indices
+        col_indices = np.empty(len(row_indices), dtype=row_indices.dtype)
+        M, N = self._shape
+        sparse._sparsetools.expandptr(N, self._index_mat.indptr, col_indices)
 
-        if subedge_indices.dtype == bool:
-            out_edges = self._edges[subedge_indices]
-        else:
-            out_edges = self._edges.iloc[subedge_indices]
-        return ConnectivityMatrix(out_edges, vertex_properties=self._vertex_properties,
-                                  shape=self._shape,
-                                  default_edge_property=self._default_edge)
+        row_indices = row_indices[subedge_indices]
+        col_indices = col_indices[subedge_indices]
+
+        out_edges = self._edges.iloc[subedge_indices]
+        out_indices = np.empty_like(row_indices, dtype=row_indices.dtype)
+        out_indptr = np.empty(len(self._index_mat.indptr), dtype=self._index_mat.indptr.dtype)
+        out_data = np.empty(len(row_indices), dtype=self._index_mat.data.dtype)
+
+        sparse._sparsetools.coo_tocsr(N, M, len(out_edges), col_indices, row_indices,
+        self._index_mat.data, out_indptr, out_indices, out_data)
+
+        return ConnectivityMatrix(out_indices, out_indptr, vertex_properties=self._vertex_properties,
+        edge_properties=out_edges, default_edge_property=self._default_edge, shape=(M, N))
         
     def sample_vertices_n_neurons(self, ref_gids, sub_gids=None):
         """

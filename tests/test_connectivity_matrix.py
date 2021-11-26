@@ -47,6 +47,14 @@ def test_base_connectivity_matrix():
     assert "meh" in M.foo
 
 
+def test_subpopulation():
+    M = test_module.ConnectivityMatrix(m_sparse, vertex_properties=props)
+    idx = numpy.random.choice(len(M), int(0.8*len(M)), replace=False)
+    idgids = M.gids[idx]
+    assert (M.subpopulation(idgids).array == M.array[numpy.ix_(idx, idx)]).all()
+    assert (M.subpopulation(idgids).array == M.subarray(idgids)).all()
+
+
 def test_connectivity_matrix_node_indexing():
     M = test_module.ConnectivityMatrix(m_sparse, vertex_properties=props)
     assert len(M.index("depth").lt(300)) == 7
