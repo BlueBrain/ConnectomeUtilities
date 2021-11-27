@@ -94,3 +94,24 @@ def test_load_save():
     N = test_module.ConnectivityMatrix.from_h5("test.h5", group_name="test_group",
     prefix="test_matrix")
     assert (M.array == N.array).all()
+
+
+def test_time_dependent_matrix():
+    numpy.random.seed(123)
+    row = numpy.random.randint(0, 100, 500)
+    col = numpy.random.randint(0, 100, 500)
+    df = {
+        "a": pandas.DataFrame(numpy.random.rand(500, 3), columns=[0.0, 10.0, 20.0]),
+        "b": pandas.DataFrame(numpy.random.rand(500, 3), columns=[0.0, 10.0, 20.0])
+    }
+
+    M = test_module.TimeDependentMatrix(row, col, edge_properties=df)
+    assert M.matrix.nnz == 500
+    assert M.edges.shape[1] == 2
+    assert M._time == 0.0
+    assert M.filter().lt(0.2).matrix.nnz == 83
+    assert M.at_time(10.0).filter().lt(0.2).matrix.nnz == 99
+    Mb = M.default("b")
+    assert Mb._time == M._time
+    assert Mb.at_time(20.0).filter().lt(0.2).matrix.nnz == 100
+

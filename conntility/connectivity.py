@@ -5,6 +5,7 @@ authors: Michael Reimann, András Ecker
 last modified: 11.2021
 """
 
+from operator import ne
 import h5py
 import numpy as np
 import pandas as pd
@@ -84,7 +85,7 @@ class _MatrixNodeIndexer(object):
 class _MatrixEdgeIndexer(object):
     def __init__(self, parent, prop_name):
         self._parent = parent
-        self._prop = parent._edges[prop_name]
+        self._prop = parent.edges[prop_name]
 
     def eq(self, other):
         idxx = self._prop == other
@@ -137,6 +138,10 @@ class ConnectivityMatrix(object):
                 "row": m.row,
                 "col": m.col
             })
+            # Adding additional edge properties
+            if edge_properties is not None:
+                for prop_name, prop_mat in edge_properties.items():
+                    self.add_edge_property(prop_name, prop_mat)
         else:
             if len(args) >= 2:
                 assert len(args[0]) == len(args[1])
@@ -148,39 +153,21 @@ class ConnectivityMatrix(object):
                 df = args[0]
             """Initialization 2: By edge-specific DataFrames"""
             assert edge_properties is not None
+            edge_properties = pd.DataFrame(edge_properties)  # In case input is dict
             assert len(edge_properties) == len(df)
             self._edge_indices = df
+
             if shape is None: 
-                shape = tuple(df.max(axis=0).values)
-            self._edges = pd.DataFrame({})
+                shape = tuple(df.max(axis=0).values + 1)
+            self._edges = edge_properties
+            if default_edge_property not in self.edges:
+                default_edge_property = edge_properties.columns[0]  # Or exception?
 
         # In the future: implement the ability to represent connectivity from population A to B.
         # For now only connectivity within one and the same population
         assert shape[0] == shape[1]
         self._shape = shape
-
-        # Initialize vertex property DataFrame
-        if vertex_properties is None:
-            if vertex_labels is None:
-                vertex_labels = np.arange(shape[0])
-            self._vertex_properties = pd.DataFrame({}, index=vertex_labels)
-        elif isinstance(vertex_properties, dict):
-            if vertex_labels is None:
-                vertex_labels = np.arange(shape[0])
-            self._vertex_properties = pd.DataFrame(vertex_properties, index=vertex_labels)
-        elif isinstance(vertex_properties, pd.DataFrame):
-            if vertex_labels is not None:
-                raise ValueError("""Cannot specify vertex labels separately
-                                 when instantiating vertex_properties explicitly""")
-            self._vertex_properties = vertex_properties
-        else:
-            raise ValueError("""When specifying vertex properties it must be a DataFrame or dict""")
-        assert len(self._vertex_properties) == shape[0]
-
-        # Adding additional edge properties
-        if edge_properties is not None:
-            for prop_name, prop_mat in edge_properties.items():
-                self.add_edge_property(prop_name, prop_mat)
+        self.__inititalize_vertex_properties__(vertex_labels, vertex_properties)
 
         self._default_edge = default_edge_property
 
@@ -213,6 +200,24 @@ class ConnectivityMatrix(object):
         else:
             assert len(new_values) == len(self._edge_indices)
             self._edges[new_label] = new_values
+    
+    def __inititalize_vertex_properties__(self, vertex_labels, vertex_properties):
+        if vertex_properties is None:
+            if vertex_labels is None:
+                vertex_labels = np.arange(self._shape[0])
+            self._vertex_properties = pd.DataFrame({}, index=vertex_labels)
+        elif isinstance(vertex_properties, dict):
+            if vertex_labels is None:
+                vertex_labels = np.arange(self._hape[0])
+            self._vertex_properties = pd.DataFrame(vertex_properties, index=vertex_labels)
+        elif isinstance(vertex_properties, pd.DataFrame):
+            if vertex_labels is not None:
+                raise ValueError("""Cannot specify vertex labels separately
+                                 when instantiating vertex_properties explicitly""")
+            self._vertex_properties = vertex_properties
+        else:
+            raise ValueError("""When specifying vertex properties it must be a DataFrame or dict""")
+        assert len(self._vertex_properties) == self._shape[0]
 
     def __make_lookup__(self):
         return pd.Series(np.arange(self._shape[0]), index=self._vertex_properties.index)
@@ -220,13 +225,16 @@ class ConnectivityMatrix(object):
     def matrix_(self, edge_property=None):
         if edge_property is None:
             edge_property = self._default_edge
-        return sparse.coo_matrix((self._edges[edge_property], (self._edge_indices["row"], self._edge_indices["col"])),
+        return sparse.coo_matrix((self.edges[edge_property], (self._edge_indices["row"], self._edge_indices["col"])),
                                  shape=self._shape, copy=False)
+    @property
+    def edges(self):
+        return self._edges
 
     @property
     def edge_properties(self):
         # TODO: Maybe add 'row' and 'col'?
-        return self._edges.columns.values
+        return self.edges.columns.values
 
     @property
     def vertex_properties(self):
@@ -235,7 +243,7 @@ class ConnectivityMatrix(object):
     def matrix_(self, edge_property=None):
         if edge_property is None:
             edge_property = self._default_edge
-        return sparse.coo_matrix((self._edges[edge_property], (self._edge_indices["row"], self._edge_indices["col"])),
+        return sparse.coo_matrix((self.edges[edge_property], (self._edge_indices["row"], self._edge_indices["col"])),
                                  shape=self._shape)
 
     @property
@@ -265,9 +273,12 @@ class ConnectivityMatrix(object):
             prop_name = self._default_edge
         return _MatrixEdgeIndexer(self, prop_name)
 
-    def default(self, new_default_property):
+    def default(self, new_default_property, copy=True):
         assert new_default_property in self.edge_properties, "Edge property {0} unknown!".format(new_default_property)
-        return ConnectivityMatrix(self._edge_indices["row"], self._edge_indices["col"],
+        if not copy:
+            self._default_edge = new_default_property
+            return self
+        return self.__class__(self._edge_indices["row"], self._edge_indices["col"],
                                   edge_properties=self._edges,
                                   vertex_properties=self._vertex_properties, shape=self._shape,
                                   default_edge_property=new_default_property)
@@ -335,7 +346,7 @@ class ConnectivityMatrix(object):
 
         out_edges = self._edges.iloc[subindex.data]
         out_vertices = self._vertex_properties.loc[subpop_ids]
-        return ConnectivityMatrix(subindex.row, subindex.col, vertex_properties=out_vertices,
+        return self.__class__(subindex.row, subindex.col, vertex_properties=out_vertices,
                                   edge_properties=out_edges, default_edge_property=self._default_edge,
                                   shape=(len(subpop_ids), len(subpop_ids)))
 
@@ -348,7 +359,7 @@ class ConnectivityMatrix(object):
             out_edges = self._edges[subedge_indices]
         else:
             out_edges = self._edges.iloc[subedge_indices]
-        return ConnectivityMatrix(row_indices, col_indices, vertex_properties=self._vertex_properties,
+        return self.__class__(row_indices, col_indices, vertex_properties=self._vertex_properties,
         edge_properties=out_edges, default_edge_property=self._default_edge, shape=self._shape)
 
     def random_n_gids(self, ref):
@@ -402,3 +413,54 @@ class ConnectivityMatrix(object):
             data_grp.attrs["NEUROTOP_DEFAULT_EDGE"] = self._default_edge
             data_grp.attrs["NEUROTOP_CLASS"] = "ConnectivityMatrix"
 
+
+class TimeDependentMatrix(ConnectivityMatrix):
+    def __init__(self, *args, vertex_labels=None, vertex_properties=None, edge_properties=None, default_edge_property=None, shape=None):
+        if len(args) == 1 and isinstance(args[0], np.ndarray) or isinstance(args[0], sparse.spmatrix):
+            raise ValueError("TimeDependentMatrix can only be initialized by edge indices and edge properties")
+        if isinstance(edge_properties, dict):
+            assert np.all([isinstance(x.columns, pd.Float64Index) for x in edge_properties.values()]),\
+                 "Index of edge properties must be a Float64Index"
+            edge_properties = pd.concat(edge_properties.values(), keys=edge_properties.keys(), names=["name"], axis=1)
+            edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])
+        else:
+            assert isinstance(edge_properties, pd.DataFrame)
+            if isinstance(edge_properties.columns, pd.MultiIndex):
+                assert len(edge_properties.columns.levels) == 2, "Columns must index time and name"
+                if not isinstance(edge_properties.columns.levels[0], pd.Float64Index):
+                    assert isinstance(edge_properties.columns.levels[1], pd.Float64Index),\
+                        "Time index must be of type Float64Index"
+                    edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])
+                else:
+                    assert isinstance(edge_properties.columns.levels[0], pd.Float64Index),\
+                        "Time index must be of type Float64Index"
+            else:
+                assert isinstance(edge_properties.columns, pd.Float64Index),\
+                        "Time index must be of type Float64Index"
+                edge_properties = pd.concat([edge_properties], axis=1, copy=False, keys=["data"], names=["name"])
+                edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])
+        if default_edge_property is None:
+            default_edge_property = edge_properties.columns.levels[1][0]
+        self._time = edge_properties.columns.levels[0].min()
+        super().__init__(*args, vertex_labels=vertex_labels, vertex_properties=vertex_properties, edge_properties=edge_properties,
+                         default_edge_property=default_edge_property, shape=shape)
+    
+    @property
+    def edges(self):
+        return self._edges[self._time]
+    
+    def at_time(self, new_time):
+        # TODO: Add a copy=True kwarg that acts like in .default
+        if new_time not in self._edges:
+            raise ValueError("No time point at {0} given".format(new_time))  # TODO: interpolate to nearest point?
+        self._time = new_time
+        return self
+    
+    def add_edge_property(self, new_label, new_values):
+        # TODO: Implement
+        raise NotImplementedError("Not yet implemented for TimeDependentMatrix")
+    
+    def default(self, new_default_property, copy=True):
+        ret = super().default(new_default_property, copy=copy)
+        if copy: ret._time = self._time
+        return ret
