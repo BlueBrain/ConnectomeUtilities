@@ -152,6 +152,7 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
         # TODO: Assumes the full matrix is index from gid 1 to N, which it should. But what if some gids are missing?
         full_matrix = circuit_connection_matrix(circ, connectome=connectome, **kwargs)
         matrices = neuron_groups.apply(lambda grp: full_matrix[numpy.ix_(grp.values - 1, grp.values - 1)])
+    matrices = matrices[matrices.apply(lambda x: isinstance(x, sparse.spmatrix))]
     return matrices
 
 
