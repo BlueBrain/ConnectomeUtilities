@@ -11,6 +11,7 @@ setup(name="Connectome utilities",
       install_requires=["numpy>=1.20.0",
                         "h5py>=2.10.0"
                         "pandas>=1.2.4",
+                        "tables>=3.6",
                         "scipy>=1.5.0",
                         "voxcell>=2.7.0"
                         "bluepy>=2.0.0",
