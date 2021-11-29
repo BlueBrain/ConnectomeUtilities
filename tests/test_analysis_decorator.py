@@ -26,6 +26,8 @@ def test_analysis_by_config():
 
     with open(os.path.join(TEST_DATA_DIR, "test_analysis_config.json"), "r") as fid:
         ana_cfg = json.load(fid)
+    rnd_er = ana_cfg["analyses"]["simplex_counts"]["source"] =\
+        os.path.join(TEST_DATA_DIR, ana_cfg["analyses"]["simplex_counts"]["source"])
     rnd_er = ana_cfg["analyses"]["simplex_counts"]["decorators"][1]["analysis_arg"]["random_er"]
     rnd_er["source"] = os.path.join(TEST_DATA_DIR, rnd_er["source"])
     analyses = list(test_module.get_analyses(ana_cfg))

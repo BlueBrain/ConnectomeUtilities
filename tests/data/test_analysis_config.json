@@ -1,7 +1,7 @@
 {
     "analyses": {
         "simplex_counts": {
-            "source":"/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
+            "source":"random_simplex_counts.py",
             "args": [],
             "kwargs": {},
             "method": "simplex_counts",
