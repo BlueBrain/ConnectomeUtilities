@@ -388,7 +388,7 @@ class ConnectivityMatrix(object):
         if group_name is None:
             group_name = "full_matrix"
         full_prefix = prefix + "/" + group_name
-        vertex_properties = pd.read_hdf(fn, full_prefix + "/vertex_properties", format="table")
+        vertex_properties = pd.read_hdf(fn, full_prefix + "/vertex_properties")
         edges = pd.read_hdf(fn, full_prefix + "/edges")
         edge_idx = pd.read_hdf(fn, full_prefix + "/edge_indices")
 
@@ -467,7 +467,7 @@ class TimeDependentMatrix(ConnectivityMatrix):
         if copy: ret._time = self._time
         return ret
 
-        
+
 class ConnectivityGroup(object):
     def __init__(self, *args):
         if len(args) == 1:
