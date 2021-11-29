@@ -4,7 +4,7 @@ import pandas
 
 import bluepy
 
-from conntility import analysis as test_module
+from conntility.analysis import library as test_module
 
 TST_SZ = 100
 

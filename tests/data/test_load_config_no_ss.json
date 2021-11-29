@@ -1,0 +1,22 @@
+{
+    "loading": {
+        "base_target": "central_column_4_region_700um", 
+        "properties": ["x", "y", "z", "etype", "mtype", "layer"]
+        },
+    "filtering": [
+        {
+            "column": "etype",
+            "values": ["bNAC", "cNAC"]
+        },
+        {
+            "column": "layer",
+            "value": 1
+        }
+    ],
+    "grouping": [
+        {
+            "method": "group_by_properties",
+            "columns": ["mtype"]
+        }
+    ]
+}

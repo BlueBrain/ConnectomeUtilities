@@ -1,0 +1,32 @@
+{
+    "analyses": {
+        "simplex_counts": {
+            "source":"/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
+            "args": [],
+            "kwargs": {},
+            "method": "simplex_counts",
+            "decorators": [
+                {
+                    "name": "grouped_by_grouping_config",
+                    "args": [{"columns": ["mtype"], "method": "group_by_properties"}]
+                },
+                {
+                    "name": "control_by_randomization",
+                    "analysis_arg":
+                    {
+                        "random_er":{
+                            "source": "random_er.py",
+                            "method": "random_er",
+                            "args": [],
+                            "kwargs": {},
+                            "output": "Matrix"
+                        }
+                    },
+                    "args": [],
+                    "kwargs": {"n_randomizations": 3}
+                }
+            ],
+            "output": "Series"
+        }
+    }
+}

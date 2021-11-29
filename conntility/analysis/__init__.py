@@ -1,1 +1,3 @@
-from .diffusion_mapping import embed_pathway
+from . import library
+from .analysis import SingleMethodAnalysisFromSource as Analysis
+from .analysis import get_analyses
