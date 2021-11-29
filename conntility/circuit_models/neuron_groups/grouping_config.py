@@ -56,6 +56,19 @@ def filter_with_config(df_in, cfg_or_dict):
     return df_in.iloc[valid]
 
 
+def filter_config_to_dict(cfg_or_dict):
+    cfg = _read_if_needed(cfg_or_dict)
+    if "filtering" in cfg:
+        cfg = cfg["filtering"]
+    if not isinstance(cfg, list):
+        cfg = [cfg]
+    lst_tf = []
+    for c in cfg:
+        c = c.copy()
+        lst_tf.append((c.pop("column"), str(list(c.values())[0])))  # Needs evaluation left to right
+    return dict(lst_tf)
+
+
 def load_with_config(circ, cfg_or_dict):
     cfg = _read_if_needed(cfg_or_dict)
     if "loading" in cfg:

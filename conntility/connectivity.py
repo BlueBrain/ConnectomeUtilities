@@ -14,6 +14,8 @@ from scipy import sparse
 from .circuit_models.neuron_groups.defaults import GID
 from .circuit_models.connection_matrix import LOCAL_CONNECTOME
 
+_MAT_GLOBAL_INDEX = 0
+
 
 class _MatrixNodeIndexer(object):
     def __init__(self, parent, prop_name):
@@ -386,7 +388,7 @@ class ConnectivityMatrix(object):
         if group_name is None:
             group_name = "full_matrix"
         full_prefix = prefix + "/" + group_name
-        vertex_properties = pd.read_hdf(fn, full_prefix + "/vertex_properties")
+        vertex_properties = pd.read_hdf(fn, full_prefix + "/vertex_properties", format="table")
         edges = pd.read_hdf(fn, full_prefix + "/edges")
         edge_idx = pd.read_hdf(fn, full_prefix + "/edge_indices")
 
@@ -403,7 +405,7 @@ class ConnectivityMatrix(object):
         if group_name is None:
             group_name = "full_matrix"
         full_prefix = prefix + "/" + group_name
-        self._vertex_properties.to_hdf(fn, key=full_prefix + "/vertex_properties")
+        self._vertex_properties.to_hdf(fn, key=full_prefix + "/vertex_properties", format="table")
         self._edges.to_hdf(fn, key=full_prefix + "/edges")
         self._edge_indices.to_hdf(fn, key=full_prefix + "/edge_indices")
 
@@ -464,3 +466,89 @@ class TimeDependentMatrix(ConnectivityMatrix):
         ret = super().default(new_default_property, copy=copy)
         if copy: ret._time = self._time
         return ret
+
+        
+class ConnectivityGroup(object):
+    def __init__(self, *args):
+        if len(args) == 1:
+            assert isinstance(args[0].index, pd.MultiIndex)
+            self._mats = args[0]
+        elif len(args) == 2:
+            self._mats = pd.Series(args[1], index=pd.MultiIndex.from_frame(args[0]))
+        self._vertex_properties = pd.concat([x._vertex_properties for x in self._mats],
+                                            copy=False, axis=0).drop_duplicates()
+        
+        for colname in self._vertex_properties.columns:
+            #  TODO: Check colname against existing properties
+            setattr(self, colname, self._vertex_properties[colname].values)
+
+        # TODO: calling it "gids" might be too BlueBrain-specific! Change name?
+        self.gids = self._vertex_properties.index.values
+    
+    @property
+    def index(self):
+        return self._mats.index
+
+    @staticmethod
+    def __loaditem__(args):
+        return ConnectivityMatrix.from_h5(*args)
+    
+    def __load_if_needed__(self, args):
+        if isinstance(args, ConnectivityMatrix) or isinstance(args, pd.Series):
+            return args
+        return self.__loaditem__(args)
+    
+    def __getitem__(self, key):
+        return self.__load_if_needed__(self._mats[key])
+    
+    @classmethod
+    def from_bluepy(cls, bluepy_obj, load_config=None, connectome=LOCAL_CONNECTOME):
+        """
+        BlueConfig/CircuitConfig based constructor
+        :param bluepy_obj: bluepy Simulation or Circuit object
+        :param load_config: config dict for loading and filtering neurons from the circuit
+        :param connectome: str. that can be "local" which specifies local circuit connectome
+                           or the name of a projection to use
+        """
+        from .circuit_models.neuron_groups import load_group_filter
+        from .circuit_models import circuit_group_matrices
+
+        if hasattr(bluepy_obj, "circuit"):
+            circ = bluepy_obj.circuit
+        else:
+            circ = bluepy_obj
+        
+        nrn = load_group_filter(circ, load_config)
+
+        # TODO: think a bit about if it should even be possible to call this for a projection (remove arg. if not...)
+        mats = circuit_group_matrices(circ, nrn, connectome=connectome)
+        nrns = [nrn.loc[x].set_index(GID) for x in mats.keys()]
+        con_obj = [ConnectivityMatrix(mat, vertex_properties=n) for n, mat in zip(nrns, mats)]
+        return cls(pd.Series(con_obj, index=mats.index))
+    
+    @classmethod
+    def from_h5(cls, fn, group_name=None, prefix=None):
+        raise NotImplementedError()
+
+    def to_h5(self, fn, group_name=None, prefix=None):
+        if prefix is None:
+            prefix = "connectivity"
+        if group_name is None:
+            group_name = "conn_group"
+        full_prefix = prefix + "/" + group_name
+        self._vertex_properties.to_hdf(fn, key=full_prefix + "/vertex_properties", format="table")
+
+        matrix_prefix = full_prefix + "/matrices"
+        def _store(mat):
+            global _MAT_GLOBAL_INDEX
+            grp_name = "matrix{0}".format(_MAT_GLOBAL_INDEX)
+            mat.to_h5(fn, group_name=grp_name, prefix=matrix_prefix)
+            _MAT_GLOBAL_INDEX = _MAT_GLOBAL_INDEX + 1
+            return "::".join([fn, matrix_prefix, grp_name])
+
+        mats = self._mats.apply(_store)
+        mats.reset_index().to_hdf(fn, key=full_prefix + "/table", format="table")
+
+        with h5py.File(fn, "a") as h5:
+            data_grp = h5[full_prefix]
+            data_grp.attrs["NEUROTOP_CLASS"] = "ConnectivityGroup"
