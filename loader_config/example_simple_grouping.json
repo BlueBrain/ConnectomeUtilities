@@ -8,10 +8,6 @@
         "groups":[
             {
                 "include": "more_groups.json"
-            },
-            {
-                "filtering": [{"column": "etype", "values": ["bNAC", "cNAC"]}],
-                "name": "is_bNAC_cNAC"
             }
         ]
     },
@@ -29,6 +25,10 @@
         {
             "method": "group_by_properties",
             "columns": ["mtype", "etype"]
+        },
+        {
+            "filtering": [{"column": "etype", "values": ["bNAC", "cNAC"]}],
+            "name": "is_bNAC_cNAC"
         }
     ]
 }

@@ -76,7 +76,7 @@ def group_by_binned_properties(df_in, lst_props, bins, prefix="binned-", replace
     binned_vals.columns = [prefix + col for col in binned_vals.columns]
 
     if not replace:
-        binned_vals = pandas.concat([df_in.index.to_frame(), binned_vals], axis=1)
+        binned_vals = pandas.concat([df_in.index.to_frame(), binned_vals], axis=1, copy=False)
 
     df_in = df_in.set_index(pandas.MultiIndex.from_frame(binned_vals)).sort_index()
     return df_in

@@ -94,7 +94,7 @@ def add_extra_properties(df_in, circ, lst_properties, fm=None):
                 props.append(lst_properties.pop(lst_properties.index(p)))
         if len(props) > 0:
             new_df = extra_fun(df_in, circ, fm=fm)
-            df_in = pandas.concat([df_in, new_df[props]], axis=1)
+            df_in = pandas.concat([df_in, new_df[props]], axis=1, copy=False)
     if len(lst_properties) > 0:
         raise ValueError("Unknown properties: {0}".format(lst_properties))
     return df_in

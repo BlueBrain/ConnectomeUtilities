@@ -1,0 +1,10 @@
+[
+    {
+        "filtering": [{"column": "gid", "values": [1, 2, 3]}],
+        "name": "in_assembly1"
+    },
+    {
+        "filtering": [{"column": "gid", "values": [4, 5, 6]}],
+        "name": "in_assembly2"
+    }
+]
