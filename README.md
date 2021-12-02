@@ -463,3 +463,123 @@ print(G["L23_BP", "bNAC"].matrix.shape)
 As we can see, this results in an object that contains the subpopulations of interest. It can be indexed by the "mtype" and "etype" of the subpopulations, corresponding to the properties we have specified in the "grouping" of the loader config. Indexing returns a representation of the subpopulation with all the features described above.
 
 At this point, this is all the *"ConnectivityGroup"* can do, but more features are planned in the future.
+
+#### Reduced loader config
+As a note: In the examples above I assumed that a loader config exists as a separate .json file that is referenced in a function call. Instead, one can **always** also directly specify the dict that is otherwise contained in the file.
+
+Additionally, large parts of the config can be left out completely. Leaving out "filtering" applies no filters; leaving out "loading" will load all available properties etc. If you want to specify only one of "loading", "filtering" or "grouping", you can leave out that keyword completely and just provide its value:
+```
+reduced_config = {  # This will be understood to be the contents of "loading":
+        "base_target": "central_column_4_region_700um", 
+        "properties": ["x", "y", "z", "etype", "mtype", "layer"]
+}
+M = ConnectivityMatrix.from_bluepy(circ, reduced_config)
+```
+### Analyzing connectivity matrices
+At the root of all analysis is what we call *atomic analysis functions*. This can be any function that takes as inputs:
+  - A scipy.sparse.matrix (M x M) specifying the connectivity of a group of neurons
+  - A pandas.DataFrame (length M) with columns specifying neuron properties
+  - any number of additional arguments (*args)
+  - any number of keyword arguments (**kwargs)
+and returns either
+  - A scalar value
+or
+  - A pandas.Series
+
+An example of the first return type would be an analysis that returns the average connection probability, an example of the second would be the number of simplices in all dimensions, returned as a Series with dimension as index.
+
+#### Decorating atomic analyses
+Conntility provides functionality to "get more" from such atomic analyses. To that end it provides function decorators that turn it into a more complicated, more involved analysis. Currently, the following decorators exist:
+  - **grouped_by_grouping_config**: This decorator uses a reference to a *loader config* and accesses the "grouping" entry in the config. Then it turns any analysis into one that is instead applied separately to the submatrices of the groupings defined by the config.
+  - **grouped_by_filtering_config**: This works very similarly to the previous one, but allows a bit more flexibility. It takes a list of *loader configs* and acceses their "filtering" entries. Then, each thusly defined filtering will be considered a group comprising the neurons passing the filter. Then the submatrices of these groups will be separately analyzed
+  - **control_by_randomization**: This takes an analysis and performs it once on the actual matrix, then several times on a randomized shuffled control. Then returns the actual result and the mean of the controls. To generate the controls, it takes a reference to a randomization function that can exist anywhere on the file system.
+
+You can find examples for all of these further down.
+#### Dynamic import of analyses
+Conntility provides functionality to import an atomic analysis or randomization function from any file at runtime. That is, the analysis does not need to be part of any package that is installed anywhere. This allows the user to quickly make use of the analysis without just copy-pasting it into their own code.
+
+This is a separation of the actual payload of an analysis and the tubing and infrastructure required to efficiently use it - Think about the atomic analysis as a bullet and conntility as the gun.
+
+This functionality requires the analysis be specified in an **analysis config**, i.e. where the file can be found, which function within the file to use and what additional arguments it might use.
+Just as before, the *analysis config* can either exist as a separate .json file, or be directly provided as a dict.
+
+To explain the format, I will walk you through some examples:
+
+#### Examples
+
+##### grouped_by_grouping_config
+As an example, let's consider simplex counts. First the basic analysis:
+```
+from conntility.analysis import Analysis
+from conntility.connectivity import ConnectivityMatrix
+
+M = ConnectivityMatrix.from_bluepy(circ, loader_cfg)  # As in the previous examples above
+
+analysis_specs = {
+          "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
+          "method": "simplex-counts",
+          "output": "scalar"
+        }
+A = Analysis("simplex_counts", analysis_specs)
+A.apply(M.matrix)
+
+dim
+0   1051
+1   1150
+2   ...
+...
+```
+Of course you can manually just apply the analysis also to subtargets:
+```
+ A.apply(M.index("distance").lt(1600).matrix) 
+dim
+0    500
+1    342
+2    ...
+...
+```
+Or we use a decorator to apply it to subtargets separately. To that end, add an entry "decorators" to the *analysis config*:
+```
+analysis_specs = {
+            "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
+            "method": "simplex_counts",
+            "decorators": [
+                {
+                    "name": "grouped_by_grouping_config",
+                    "args": [{"columns": ["mtype"], "method": "group_by_properties"}]
+                }
+            ],
+            "output": "scalar"
+}
+A = Analysis("simplex_counts", analysis_specs)
+A.apply(M.matrix, M._vertex_properties)
+
+idx-mtype  dim
+L23_BP     0      102
+           1        0
+           2       85
+           3      161
+           4        8
+L23_BTC    0      126
+           1       30
+           2       44
+[...]
+L23_SBC    0      119
+           1       29
+           2      244
+           3      182
+           4       37
+```
+We see that the analysis has now been performed for all mtypes separately. As a sanity check we can do some filtering beforehand:
+```
+subM = M.index("mtype").eq("L23_SBC")
+A.apply(subM.matrix.tocsc(), subM._vertex_properties)
+
+idx-mtype  dim
+L23_SBC    0      119
+           1       29
+           2      224
+           3      182
+           4       37
+```
+As expected, now only a single result consistent with the previous one is returned due to the prior filtering by m-type.
