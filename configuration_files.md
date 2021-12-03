@@ -718,5 +718,50 @@ in_intersection  0         0
 dtype: int64
 ```
 
+##### control_by_randomization
 
+This decorator executes an analysis as usual on a connection matrix, then calls a specified randomization function on the matrix and repeats the analysis on the randomized control. The matrix is randomized and analyzed a specifiable number of times, and the mean result is reported in addition to the result for the original matrix.
 
+**TODO**: Provide example.
+
+To make full use of this randomization, it is important to understand that the decorators can be chained and nested! For example, it is possible to first split a connectivity matrix by m-type, analyze each submatrix, then randomize the submatrices and analyze them again. This is done by first listing the grouping decorator, then the randomization decorator:
+```
+[...]
+            "decorators": [
+                {
+                    "name": "grouped_by_grouping_config",
+                    "args": [{"columns": ["mtype"], "method": "group_by_properties"}]
+                },
+                {
+                    "name": "control_by_randomization",
+                    "analysis_arg":
+                    {
+                        "random_er":{
+                            "source": "random_er.py",
+                            "method": "random_er",
+                            "args": [],
+                            "kwargs": {},
+                            "output": "Matrix"
+                        }
+                    },
+                    "args": [],
+                    "kwargs": {"n_randomizations": 3}
+                }
+            ],
+[...]
+A.apply(M.matrix.tocsc(), M.vertices)
+Control    idx-mtype  dim
+data       L23_BP     0      102.000000
+                      1        0.000000
+                                ...    
+random_er  L23_SBC    0      119.000000
+                      1       18.333333
+                      2        2.000000
+Length: 90, dtype: float64
+```
+
+We see that we now get a breakdown both by mtype and by data vs. control.
+
+And it gets even more powerful: Let's build an analysis where the entire matrix is analyzed as one, but in the control we apply an ER-randomization separately for submatrices of each m-type pathway (stochastic block model):
+
+**TODO**: This needs to be implemented.

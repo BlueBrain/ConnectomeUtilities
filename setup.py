@@ -5,7 +5,7 @@ if sys.version_info < (3, 6):
     sys.exit("Sorry, Python < 3.6 is not supported.")
 
 setup(name="Connectome utilities",
-      version="0.0.1",
+      version="0.1.1",
       author="BBP",
       packages=find_packages(),
       install_requires=["numpy>=1.20.0",

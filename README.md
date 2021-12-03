@@ -55,3 +55,50 @@ conntility provides python functions to simplify and standardize any of these st
 To enable flexible, reproducable and re-usable analyses, some of the functionality must be parameterized through the use of .json formatted configuration files. To understand their format and how to use them, refer to [this documentation](configuration_files.md). In that document, I will walk you through a number of use cases and explain the contents of the configurations along the way.
 
 In the remainder of this document, I will simply provide an overview of all functions and their purpose.
+
+  - circuit_models: For interacting with and loading from circuit models
+    - neuron_groups: Loading neuron properties from SONATA circuits and defining groups or subsets of them
+      - *load_neurons*: Load specified neurons and return their properties in a DataFrame. In addition to basic properties (accessed through bluepy), it provides flatmapped locations, supersampled flat locations, any property in a volumetric atlas. 
+      - *load_projection_locations*: Same, but for projection fibers. For a single specified projection.
+      - *load_all_projection_locations*: Same, loads all projections existing in a Circuit model
+      - *group_by_properties*: Define a group of neurons based on structural properties
+      - *group_by_binned_properties*:  Same, but for numerical values (they are binned)
+      - *group_by_grid*: Group by spatial locations, splitting space into hexagonal, triangular or rhombic grids
+    
+      - *load_filter*: Access to neuron property loading (see above), configured through a .json config
+      - *load_group_filter*: Same, but including access to the grouping functionality
+    
+    - *simulation_conditions*: Small utility to return simulation conditions (as found in BlueConfig.json) from a Simulation object
+    - *input_spikes*: Small utility to return input spikes given to a Simulation in the same format as output spikes (pandas.Series)
+    - *input_innervation*: Calculates how strongly any neuron is innervated by input (or recurrent!) spikes in a specified time window of a Simulation
+    - *input_innervation_from_matrix*: Same, but provide custom connectivity matrix
+
+    - *circuit_connection_matrix*: Most useful: Look up a connectivity matrix from a Circuit object for any pre- post-synaptic population, including projection fibers; for local connectivity or any projection.
+    - *connection_matrix_for_gids*: Same, but directly specify the sonata connectome file instead of Circuit object.
+    - *circuit_group_matrices*: Uses the grouping functionality mentioned above; Looks up connection matrices *within* specified groups of neurons.
+    - *circuit_cross_group_matrices*: Similar to the previous. But in addition to the matrices within groups (A->A), also returns matrices between groups (A -> B).
+    - *circuit_matrix_between_groups*: Uses the grouping functionality mentioned above: Count the number of connections between specified groups of neurons.
+
+- *flatmapping*: Tools to get more out of flat maps. Mostly supersampling
+  - *flat_region_image*: Simple utility to generate a RGB image (N x M x 3 numpy.array) of a flat view of a model with regions in different colors.
+  - *apply_flatmap_with_translation*: Simple utility that helps with looking up flat locations of projection fibers: Since they are placed outside the volume a direct lookup is impossible, so they will translated along their direction vectors until they hit the mapped volume.
+  - *supersample_flatmap*: Return a copy of a flat map where the locations are no longer integer valued, but in floating point micrometers. That is, each voxel is associated with a flat location in um.
+  - *supersampled_locations*: Supersamples (and transforms to um) the flat location of any 3d point or array of 3d points.
+  - *estimate_flatmap_pixel_size*: Helper function to estimate the approximate size (in um) that corresponds to a single flatmap pixel.
+  - *per_pixel_coordinate_transformation*: Very technical helper that provides access to intermediate coordinate system between the original 3d coordinates and the supersampled flat coordinates, such as local coordinates "within" each pixel.
+
+- *io*: Input/Output
+  - *logging*: Centralized logger for this package
+  - *write_toc_plus_payload*: Helper for storing multiple scipy.sparse matrices in a single .hdf5 file in a very efficient way
+  - *read_toc_plus_payload*: Helper for reading back the stored matrices. Implements lazy reading for potential speedup.
+
+- *analysis*: Making it easier / faster / better reproducible to apply connectivity analyses
+  - *Analysis*: A class instantiating a single connectivity analysis. Can import the analysis dynamically from any file at runtime. Configured through a .json config file. For details, see [this tutorial](configuration_files.md).
+  - *get_analyses*: Helper to rapidly read a number of analyses defined in a config.
+  - *library*: In principle, individual atomic analyses are not supposed to be in this repository. But I put it here temporarilily until it is adopted by a different repo.
+    - *embed_pathway*: Perform diffusion embedding on a connection matrix (weighted or unweighted, sparse or dense).
+  - *analysis_decorators*: Decorators to turn atomic analysis of a connection matrix into more powerful ones. For details, see [this tutorial](configuration_files.md).
+
+  - *ConnectivityMatrix*: High-level class that defines the connectivity of a population of neurons as well as the properties of the neurons. Provides access to multiple connectivity properties, such as strength or weight. Provides powerful filtering functions and generation of stochastic control samples. Best used with loader configs and analysis configs (see [this tutorial](configuration_files.md))
+  - *TimeDependentMatrix*: Represents a ConnectivityMatrix where connection properties (weights) change over time.
+  - *ConnectivityGroup*: Represents a group of ConnectivityMatrices that are subpopulations of a single larger population.
