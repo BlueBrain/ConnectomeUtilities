@@ -232,6 +232,10 @@ class ConnectivityMatrix(object):
     @property
     def edges(self):
         return self._edges
+    
+    @property
+    def vertices(self):
+        return self._vertex_properties.reset_index()
 
     @property
     def edge_properties(self):

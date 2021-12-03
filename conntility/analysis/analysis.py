@@ -6,6 +6,7 @@ from ..plugins import import_module
 
 
 from ..io.logging import get_logger
+from ..circuit_models.neuron_groups.grouping_config import _resolve_includes
 
 LOG = get_logger("Topology Pipeline Analysis", "INFO")
 
@@ -85,7 +86,7 @@ class SingleMethodAnalysisFromSource:
     def __init__(self, name, description):
         """..."""
         self._name = name
-        self._description = description
+        self._description = _resolve_includes(description)
         self._source = self.read_source(description)
         self._args = self.read_args(description)
         self._kwargs = self.read_kwargs(description)
