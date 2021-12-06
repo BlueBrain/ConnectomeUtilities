@@ -1,0 +1,14 @@
+[
+    {
+        "filtering": [{"column": "etype", "values": 
+            [0, 1, 2]
+                }],
+        "name": "in_assembly1"
+    },
+    {
+        "filtering": [{"column": "etype", "values": 
+            [2, 3, 4]
+            }],
+        "name": "in_assembly2"
+    }
+]

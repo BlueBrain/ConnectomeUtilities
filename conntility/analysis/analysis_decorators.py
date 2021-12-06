@@ -17,8 +17,9 @@ def grouped_by_grouping_config(grp_cfg):
             submatrices = grouped["__index__"].groupby(grouped.index.names).apply(lambda x: matrix[numpy.ix_(x.values, x.values)])
             idxx = grouped.index.to_frame().drop_duplicates()
             if isinstance(submatrices.index, pandas.MultiIndex):
+                colnames = idxx.columns
                 idxx = list(map(tuple, idxx.values))
-                out_index = pandas.MultiIndex.from_tuples(idxx)
+                out_index = pandas.MultiIndex.from_tuples(idxx, names=colnames)
             else:
                 idxx = idxx.values[:, 0]
                 out_index = pandas.Index(idxx, name=grouped.index.name)

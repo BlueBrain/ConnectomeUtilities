@@ -9,3 +9,6 @@ def simplex_counts(M, nrn):
         [M.shape[0], M.nnz] + [random.randint(1, x) for x in [300, 200, 50]],
         index=pandas.Index(range(5), name="dim")
     )
+
+def random_scalar(M, nrn):
+    return random.randint(0, 123)

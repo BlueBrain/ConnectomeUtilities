@@ -27,6 +27,19 @@
                 }
             ],
             "output": "Series"
+        },
+        "random_number": {
+            "source":"random_simplex_counts.py",
+            "args": [],
+            "kwargs": {},
+            "method": "random_scalar",
+            "decorators": [
+                {
+                    "name": "grouped_by_grouping_config",
+                    "args": [{"columns": ["mtype", "etype"], "method": "group_by_properties"}]
+                }
+            ],
+            "output": "Series"
         }
     }
 }

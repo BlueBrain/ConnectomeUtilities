@@ -1,3 +1,3 @@
-from . import library
+from . import library, analysis_decorators
 from .analysis import SingleMethodAnalysisFromSource as Analysis
 from .analysis import get_analyses
