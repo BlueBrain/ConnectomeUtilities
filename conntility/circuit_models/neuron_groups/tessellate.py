@@ -3,8 +3,8 @@ import logging
 
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
-from matplotlib.patches import Rectangle
+# from matplotlib import pyplot as plt
+# from matplotlib.patches import Rectangle
 
 
 LOG = logging.getLogger("Flatmap Utility")
@@ -237,8 +237,7 @@ class TriTille:
         ori = origin if origin is not None else self._origin
 
         if graphic is None:
-            figure = plt.figure(figsize=(12, 12))
-            axes = figure.add_subplot(111, aspect=1.)
+            raise ValueError("Need to specify figure and axes for plotting!")
         else:
             figure, axes = graphic
         graphic = (figure, axes)
@@ -247,7 +246,7 @@ class TriTille:
                           joinstyle="bevel", padding=None):
             """..."""
 
-
+            from matplotlib.patches import Rectangle  # TODO: Let's remove this matplotlib dependence
             x0, y0 = ori
             boundary = Rectangle(xy=ori, height=height, width=width,
                                  fill=False, color=color,
@@ -499,8 +498,7 @@ class TriTille:
                  if bins is None else bins)
 
         if graphic is None:
-            figure = plt.figure(figsize=(12, 12))
-            axes = figure.add_subplot(111, aspect=1.)
+            raise ValueError("Need to specify figure and axes for plotting!")
         else:
             figure, axes = graphic
 
@@ -515,14 +513,14 @@ class TriTille:
         else:
             colors = pointcolor
 
-        plt.scatter(positions["x"], positions["y"],
+        axes.scatter(positions["x"], positions["y"],
                     c=colors, marker=pointmarker, s=pointmarkersize)
 
         if with_grid:
 
             grid = self.locate_grid(tiles)
 
-            plt.scatter(grid["x"], grid["y"], c="black", s=80)
+            axes.scatter(grid["x"], grid["y"], c="black", s=80)
 
         if annotate:
 
