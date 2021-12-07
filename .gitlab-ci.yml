@@ -1,6 +1,6 @@
 coverage-job:
   stage: test
-  image: ubuntu:latest
+  image: python:3.8-bullseye
   before_script:
     - echo "Loaded $(python -V)"
     - CI_VENV="$(pwd)/venv"
