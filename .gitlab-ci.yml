@@ -1,6 +1,14 @@
 coverage-job:
   stage: test
-  image: python:3
+  image: quay.io/pypa/manylinux2014_x86_64
+  before_script:
+    - PYTHON_ROOT=/opt/python/cp38-cp38
+    - export PATH=$PYTHON_ROOT/bin:$PATH
+    - echo "Loaded $(python -V)"
+    - CI_VENV="$(pwd)/venv"
+    - rm -rf "$CI_VENV"
+    - python -mvenv "$CI_VENV"
+    - source "$CI_VENV/bin/activate"
   script:
     - pip install pytest pytest-cov
     - coverage run -m pytest 
