@@ -345,6 +345,7 @@ class ConnectivityMatrix(object):
         subpop_ids = self.__extract_vertex_ids__(subpop_ids)
         subpop_idx = self._lookup[subpop_ids]
         # TODO: This would be more efficient if the underlying representation was csc.
+        # TODO: This fails if there are duplicate entries with the same row/col.
         subindex = sparse.coo_matrix((range(len(self._edge_indices["row"])),
                                     (self._edge_indices["row"], self._edge_indices["col"])),
                                      copy=False, shape=self._shape).tocsc()

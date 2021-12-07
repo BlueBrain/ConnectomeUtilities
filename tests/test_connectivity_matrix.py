@@ -77,15 +77,31 @@ def test_connectivity_matrix_node_indexing():
     subpop = M.index("depth").random_numerical(sel_gids, n_bins=2)
     assert numpy.all(gids == subpop.gids)
 
+    sel_gids = M.gids[[0, -1]]
+    subpop = M.index("foo").random_categorical(sel_gids)
+    assert len(subpop) == 2
+    assert "bar" in subpop.foo and "meh" in subpop.foo
 
-def test_connectivity_matrix_edge_indexing():
+
+def test_connectivity_matrix_edge_indexing_and_adding():
     M = test_module.ConnectivityMatrix(m_sparse, vertex_properties=props)
     assert M.filter().lt(2).matrix.nnz == M.matrix.nnz
     assert M.filter().lt(1).matrix.nnz == 0
 
     numpy.random.seed(123)
     M.add_edge_property("for_testing", numpy.random.rand(len(M._edges)))
+    Md = M.default("for_testing")
+    assert len(Md.filter().lt(0.5)._edges) + len(Md.filter().ge(0.5)._edges) == len(M._edges)
+    assert len(Md.filter().le(0.5)._edges) + len(Md.filter().gt(0.5)._edges) == len(M._edges)
     assert M.default("for_testing").filter().lt(0.5).matrix.nnz == 3
+
+    int_property = numpy.random.randint(1, 6, size=M.array.shape)
+    int_property[M.array == 0] = 0
+    M.add_edge_property("category_testing", int_property)
+    M.add_edge_property("category_testing2", sparse.coo_matrix(int_property))
+    assert len(M.filter("category_testing").isin([1, 2, 3, 4, 5])._edges) == len(M._edges)
+    fltrd_M = M.filter("category_testing").eq(1)
+    assert (fltrd_M.edges["category_testing"] == 1).mean() == 1.0
 
 
 def test_load_save():
@@ -100,18 +116,21 @@ def test_time_dependent_matrix():
     numpy.random.seed(123)
     row = numpy.random.randint(0, 100, 500)
     col = numpy.random.randint(0, 100, 500)
+    rowcol = pandas.DataFrame({"row": row, "col": col}).drop_duplicates()
+    L = len(rowcol)
     df = {
-        "a": pandas.DataFrame(numpy.random.rand(500, 3), columns=[0.0, 10.0, 20.0]),
-        "b": pandas.DataFrame(numpy.random.rand(500, 3), columns=[0.0, 10.0, 20.0])
+        "a": pandas.DataFrame(numpy.random.rand(L, 3), columns=[0.0, 10.0, 20.0]),
+        "b": pandas.DataFrame(numpy.random.rand(L, 3), columns=[0.0, 10.0, 20.0])
     }
 
-    M = test_module.TimeDependentMatrix(row, col, edge_properties=df)
-    assert M.matrix.nnz == 500
+    M = test_module.TimeDependentMatrix(rowcol["row"].values, rowcol["col"].values,
+                                        edge_properties=df)
+    assert M.matrix.nnz == len(rowcol)
     assert M.edges.shape[1] == 2
     assert M._time == 0.0
-    assert M.filter().lt(0.2).matrix.nnz == 83
-    assert M.at_time(10.0).filter().lt(0.2).matrix.nnz == 99
+    assert M.filter().lt(0.2).matrix.nnz == 82
+    assert M.at_time(10.0).filter().lt(0.2).matrix.nnz == 98
     Mb = M.default("b")
     assert Mb._time == M._time
-    assert Mb.at_time(20.0).filter().lt(0.2).matrix.nnz == 100
+    assert Mb.at_time(20.0).filter().lt(0.2).matrix.nnz == 96
 

@@ -1,7 +1,14 @@
-build-job:
-  stage: build
+coverage-job:
+  stage: test
+  image: python:3
   script:
-    - echo "Hello, $GITLAB_USER_LOGIN!"
+    - pip install pytest pytest-cov
+    - coverage run -m pytest 
+    - coverage report
+    - coverage xml
+  artifacts:
+    reports:
+      cobertura: coverage.xml
 
 test-job:
   tags:
