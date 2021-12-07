@@ -7,8 +7,10 @@ coverage-job:
     - rm -rf "$CI_VENV"
     - python -mvenv "$CI_VENV"
     - source "$CI_VENV/bin/activate"
-  script:
+    - python -m pip install --upgrade pip
+    - pip install -r requirements.txt
     - pip install pytest pytest-cov
+  script:
     - coverage run -m pytest 
     - coverage report
     - coverage xml
