@@ -5,6 +5,7 @@ authors: Michael Reimann, András Ecker
 last modified: 11.2021
 """
 
+from json import load
 from operator import ne
 import h5py
 import numpy as np
@@ -471,6 +472,55 @@ class TimeDependentMatrix(ConnectivityMatrix):
         ret = super().default(new_default_property, copy=copy)
         if copy: ret._time = self._time
         return ret
+    
+    @classmethod
+    def from_report(cls, sim, report_cfg, presyn_mapping=None, load_config=None, chunk_size=10000):
+        from .io.synapse_report import presyn_gid_lookup, sonata_report, read_chunk, group_chunk
+        from .circuit_models.neuron_groups.grouping_config import _read_if_needed
+        from .circuit_models.neuron_groups.grouping_config import load_filter
+        from tqdm import tqdm
+
+        if presyn_mapping is None:
+            raise NotImplementedError("Must provide precalculated mapping!")
+
+        load_config = _read_if_needed(load_config)
+        sim_tgt = sim.config.Run["CircuitTarget"]
+        if load_config is None:
+            load_config = {"loading": {"base_target": sim_tgt}}
+        elif "loading" in load_config:
+            load_config["loading"]["base_target"] = sim_tgt
+        else:
+            load_config["base_target"] = sim_tgt
+        
+        ## TODO: What if the report is not on the local connectome?
+        #baseM = ConnectivityMatrix.from_bluepy(sim.circuit, load_config=load_config)
+        nrn = load_filter(sim.circuit, load_config)
+
+        # lo_gids = dict([(g, i) for i, g in enumerate(baseM.gids)])
+        lo_gids = dict([(g, i) for i, g in enumerate(nrn["gid"])])
+        lookup = presyn_gid_lookup(presyn_mapping, nrn["gid"])
+
+        report, report_gids = sonata_report(sim, report_cfg)
+        tgt_report_gids = np.intersect1d(nrn["gid"], report_gids)
+        non_report_gids = np.setdiff1d(nrn["gid"], report_gids)
+
+        splt = np.arange(0, len(tgt_report_gids) + chunk_size, chunk_size)
+
+        edges = None; edge_indices=None
+        for a, b in tqdm(zip(splt[:-1], splt[1:]), total=len(splt) - 1):
+            chunk = read_chunk(report, report_cfg, lookup, tgt_report_gids[a:b])
+            df = group_chunk(chunk, report_cfg)
+            df.index = pd.MultiIndex.from_frame(df.index.to_frame().applymap(lambda x: lo_gids[x]))
+            if edges is None:
+                edges = df
+            else:
+                edges = pd.concat([edges, df], axis=0, copy=False)
+        
+        new_idxx = pd.RangeIndex(len(edges))
+        edge_ids = edges.index.to_frame().rename(columns={"pre_gid": "row", "post_gid": "col"}).set_index(new_idxx)
+        edges = edges.set_index(new_idxx)
+        # TODO: Compare to expected edges. Find missing (i.e. unreported) edges and fill them in with static values
+        return cls(edge_ids, edge_properties=edges, vertex_properties=nrn.set_index("gid"))
 
 
 class ConnectivityGroup(object):
