@@ -4,3 +4,4 @@ build/**/*.py
 *.egg-info
 cov.xml
 .coverage
+synapse_report_reader_test.py

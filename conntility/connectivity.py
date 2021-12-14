@@ -474,11 +474,11 @@ class TimeDependentMatrix(ConnectivityMatrix):
         return ret
     
     @classmethod
-    def from_report(cls, sim, report_cfg, presyn_mapping=None, load_config=None, chunk_size=10000):
-        from .io.synapse_report import presyn_gid_lookup, sonata_report, read_chunk, group_chunk
+    def from_report(cls, sim, report_cfg, presyn_mapping=None, load_config=None, n_jobs=-1):
+        from .io.synapse_report import presyn_gid_lookup, report_fn, sonata_report, _il_get, group_chunked_data
         from .circuit_models.neuron_groups.grouping_config import _read_if_needed
         from .circuit_models.neuron_groups.grouping_config import load_filter
-        from tqdm import tqdm
+        import multiprocessing as mp
 
         if presyn_mapping is None:
             raise NotImplementedError("Must provide precalculated mapping!")
@@ -500,27 +500,45 @@ class TimeDependentMatrix(ConnectivityMatrix):
         lo_gids = dict([(g, i) for i, g in enumerate(nrn["gid"])])
         lookup = presyn_gid_lookup(presyn_mapping, nrn["gid"])
 
-        report, report_gids = sonata_report(sim, report_cfg)
+        report_filename = report_fn(sim, report_cfg)
+        print("Will read report at {0}...".format(report_filename))
+        report, report_gids = sonata_report(report_filename)
         tgt_report_gids = np.intersect1d(nrn["gid"], report_gids)
         non_report_gids = np.setdiff1d(nrn["gid"], report_gids)
 
-        splt = np.arange(0, len(tgt_report_gids) + chunk_size, chunk_size)
+        print("Reading entire data...")
+        data = _il_get(report, report_cfg, tgt_report_gids)
+        print("Done! Preparing chunks...")
 
-        edges = None; edge_indices=None
-        for a, b in tqdm(zip(splt[:-1], splt[1:]), total=len(splt) - 1):
-            chunk = read_chunk(report, report_cfg, lookup, tgt_report_gids[a:b])
-            df = group_chunk(chunk, report_cfg)
-            df.index = pd.MultiIndex.from_frame(df.index.to_frame().applymap(lambda x: lo_gids[x]))
-            if edges is None:
-                edges = df
-            else:
-                edges = pd.concat([edges, df], axis=0, copy=False)
+        n_jobs = mp.cpu_count() - 1 if n_jobs == -1 else n_jobs
+        splt = np.linspace(0, len(tgt_report_gids), n_jobs + 1).astype(int)
+        chunked_gids = [tgt_report_gids[a:b] for a, b in zip(splt[:-1], splt[1:])]
+        print("Building chunks...")
+        in_chunks = [
+            (data.loc[_gids], report_cfg, lookup.loc[_gids], lo_gids)
+            for _gids in chunked_gids
+        ]
+        pool = mp.Pool(processes=n_jobs)
+        print("Executing...")
+        edges = pool.map(group_chunked_data, in_chunks)
+        pool.terminate()
+        edges = pd.concat(edges, axis=0, copy=False)
+
+        # for a, b in tqdm(zip(splt[:-1], splt[1:]), total=len(splt) - 1):
+        #     chunk = read_chunk(report, report_cfg, lookup, tgt_report_gids[a:b])
+        #     df = group_chunk(chunk, report_cfg)
+        #     df.index = pd.MultiIndex.from_frame(df.index.to_frame().applymap(lambda x: lo_gids[x]))
+        #     if edges is None:
+        #         edges = df
+        #     else:
+        #         edges = pd.concat([edges, df], axis=0, copy=False)
         
         new_idxx = pd.RangeIndex(len(edges))
         edge_ids = edges.index.to_frame().rename(columns={"pre_gid": "row", "post_gid": "col"}).set_index(new_idxx)
         edges = edges.set_index(new_idxx)
+        shape= (len(nrn), len(nrn))
         # TODO: Compare to expected edges. Find missing (i.e. unreported) edges and fill them in with static values
-        return cls(edge_ids, edge_properties=edges, vertex_properties=nrn.set_index("gid"))
+        return cls(edge_ids, edge_properties=edges, vertex_properties=nrn.set_index("gid"), shape=shape)
 
 
 class ConnectivityGroup(object):
