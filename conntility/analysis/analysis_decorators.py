@@ -8,13 +8,51 @@ from ..io.logging import get_logger
 
 LOG = get_logger("DECORATORS")
 
-def grouped_by_grouping_config(grp_cfg):
+def __submatrix_presyn__(matrix):
+    return lambda x: matrix[x.values]
+
+def __submatrix_postsyn__(matrix):
+    return lambda x: matrix[:, x.values]
+
+def __submatrix_population__(matrix):
+    return lambda x: matrix[numpy.ix_(x.values, x.values)]
+
+
+def grouped_presyn_by_grouping_config(grp_cfg):
+    """
+    Perform an analysis separately on submatrices corresponding to presynaptic groups of neurons.
+    That is: for a given population A it is executed on M[A, :]
+    """
+    return _grouped_by_grouping_config(grp_cfg, __submatrix_presyn__)
+
+
+def grouped_postsyn_by_grouping_config(grp_cfg):
+    """
+    Perform an analysis separately on submatrices corresponding to postsynaptic groups of neurons.
+    That is: for a given population A it is executed on M[:, A]
+    """
+    
+    return _grouped_by_grouping_config(grp_cfg, __submatrix_postsyn__)
+
+
+def grouped_subpop_by_grouping_config(grp_cfg):
+    """
+    Perform an analysis separately on submatrices corresponding to subpopulations of neurons.
+    That is: for a given population A it is executed on M[numpy.ix_(A, A)]
+    """
+    return _grouped_by_grouping_config(grp_cfg, __submatrix_population__)
+
+
+grouped_by_grouping_config = grouped_subpop_by_grouping_config
+
+
+def _grouped_by_grouping_config(grp_cfg, submatrix_func):
     def decorator(analysis_function):
         def out_function(matrix, nrn_df, *args, **kwargs):
             nrn_df = pandas.concat([nrn_df, pandas.Series(range(len(nrn_df)),
             index=nrn_df.index, name="__index__")], copy=False, axis=1)
             grouped = group_with_config(nrn_df, grp_cfg)
-            submatrices = grouped["__index__"].groupby(grouped.index.names).apply(lambda x: matrix[numpy.ix_(x.values, x.values)])
+            submatrices = grouped["__index__"].groupby(grouped.index.names).apply(submatrix_func(matrix))
             idxx = grouped.index.to_frame().drop_duplicates()
             if isinstance(submatrices.index, pandas.MultiIndex):
                 colnames = idxx.columns
@@ -49,9 +87,28 @@ def __index_from_filter_configs(lst_fltr_cfg):
     return pandas.DataFrame.from_records(midx).astype(str)
 
 
-def grouped_by_filtering_config(lst_fltr_cfg, *args):
+def grouped_presyn_by_filtering_config(lst_fltr_cfg, *args):
     if len(args) > 0:  # In case someone mishandles how the arguments are given.
         lst_fltr_cfg = [lst_fltr_cfg] + args
+    return _grouped_by_filtering_config(lst_fltr_cfg, __submatrix_presyn__)
+
+
+def grouped_postsyn_by_filtering_config(lst_fltr_cfg, *args):
+    if len(args) > 0:  # In case someone mishandles how the arguments are given.
+        lst_fltr_cfg = [lst_fltr_cfg] + args
+    return _grouped_by_filtering_config(lst_fltr_cfg, __submatrix_postsyn__)
+
+
+def grouped_population_by_filtering_config(lst_fltr_cfg, *args):
+    if len(args) > 0:  # In case someone mishandles how the arguments are given.
+        lst_fltr_cfg = [lst_fltr_cfg] + args
+    return _grouped_by_filtering_config(lst_fltr_cfg, __submatrix_population__)
+
+
+grouped_by_filtering_config = grouped_population_by_filtering_config
+
+
+def _grouped_by_filtering_config(lst_fltr_cfg, matrix_func):
     def decorator(analysis_function):
         def out_function(matrix, nrn_df, *args, **kwargs):
             midx = __index_from_filter_configs(lst_fltr_cfg)
@@ -59,8 +116,9 @@ def grouped_by_filtering_config(lst_fltr_cfg, *args):
             index=nrn_df.index, name="__index__")], copy=False, axis=1)
             groups = [filter_with_config(nrn_df, fltr_cfg) for fltr_cfg in lst_fltr_cfg]
 
+            matrix_lo = matrix_func(matrix)
             ret = [analysis_function(
-                matrix[numpy.ix_(grp["__index__"].values, grp["__index__"].values)],
+                matrix_lo(grp["__index__"]),
                 grp, *args, **kwargs
                 ) for grp in groups]
             if numpy.all([isinstance(_res, pandas.Series) for _res in ret]):
@@ -98,3 +156,19 @@ def control_by_randomization(randomization, n_randomizations=10, **rand_kwargs):
             return pandas.Series([base_val, cmp_vals], index=["data", rand_name])
         return out_function
     return decorator
+
+
+def for_bidirectional_connectivity():
+    def decorator(analysis_function):
+        def out_function(matrix, nrn_df, *args, **kwargs):
+            matrix = matrix.astype(bool)
+            bd_matrix = (matrix.astype(int) + matrix.transpose()) == 2
+            return analysis_function(bd_matrix, nrn_df, *args, **kwargs)
+
+
+def for_undirected_connectivity():
+    def decorator(analysis_function):
+        def out_function(matrix, nrn_df, *args, **kwargs):
+            matrix = matrix.astype(bool)
+            ud_matrix = (matrix + matrix.transpose())
+            return analysis_function(ud_matrix, nrn_df, *args, **kwargs)
