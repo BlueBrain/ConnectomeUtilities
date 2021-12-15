@@ -386,6 +386,15 @@ class ConnectivityMatrix(object):
 
     def random_n(self, ref):
         return self.subpopulation(self.random_n_gids(ref))
+    
+    def analyze(self, analysis_recipe):
+        from .analysis import get_analyses
+        analyses = get_analyses(analysis_recipe)
+        res = {}
+        for analysis in analyses:
+            res[analysis._name] = analysis.apply(self.matrix.tocsc(), self.vertices)
+        return res
+
 
     @classmethod
     def from_h5(cls, fn, group_name=None, prefix=None):
