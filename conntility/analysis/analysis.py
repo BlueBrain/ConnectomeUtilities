@@ -1,7 +1,10 @@
 """
 Contributed by Vishal Sood
-Last changed: 2021/11/29
+Modified by Michael W. Reimann
+Last changed: 2021/12/15
 """
+import os
+
 from ..plugins import import_module
 
 
@@ -19,13 +22,20 @@ def widen_by_index(level, dataframe):
 
 def get_analyses(in_config):
     """..."""
+    if isinstance(in_config, str) or isinstance(in_config, os.PathLike):
+        import json
+        _root = os.path.split(os.path.abspath(in_config))[0]
+        with open(in_config, "r") as fid:
+            in_config = json.load(fid)
+    else:
+        _root = None
     analyses = in_config["analyses"]
     return collect_plugins_of_type(SingleMethodAnalysisFromSource,
-                                   in_config=analyses)
+                                   in_config=analyses, resolve_at=_root)
 
-def collect_plugins_of_type(T, in_config):
+def collect_plugins_of_type(T, in_config, **kwargs):
     """..."""
-    return {T(name, description) for name, description in in_config.items()}
+    return {T(name, description, **kwargs) for name, description in in_config.items()}
 
 
 class SingleMethodAnalysisFromSource:
@@ -83,9 +93,10 @@ class SingleMethodAnalysisFromSource:
         if not isinstance(decorators, list): return [decorators]
         return decorators
 
-    def __init__(self, name, description):
+    def __init__(self, name, description, resolve_at=None):
         """..."""
         self._name = name
+        self._root = resolve_at
         self._description = _resolve_includes(description)
         self._source = self.read_source(description)
         self._args = self.read_args(description)
@@ -130,6 +141,10 @@ class SingleMethodAnalysisFromSource:
         if callable(source):
             #TODO: inspect source
             return source
+        
+        if not os.path.isfile(source):
+            if self._root is not None and not os.path.isabs(source):
+                source = os.path.join(self._root, source)
 
         module, method = import_module(from_path=source, with_method=method)
         self._module = module
