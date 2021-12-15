@@ -497,14 +497,15 @@ class TimeDependentMatrix(ConnectivityMatrix):
         nrn = load_filter(sim.circuit, load_config)
 
         # lo_gids = dict([(g, i) for i, g in enumerate(baseM.gids)])
-        lo_gids = dict([(g, i) for i, g in enumerate(nrn["gid"])])
+        lo_gids = pd.Series(range(len(nrn["gid"])), index=nrn["gid"])
         lookup = presyn_gid_lookup(presyn_mapping, nrn["gid"])
 
         report_filename = report_fn(sim, report_cfg)
         print("Will read report at {0}...".format(report_filename))
         report, report_gids = sonata_report(report_filename)
         tgt_report_gids = np.intersect1d(nrn["gid"], report_gids)
-        non_report_gids = np.setdiff1d(nrn["gid"], report_gids)
+        tgt_report_gids = np.intersect1d(tgt_report_gids, lookup.index.to_frame()["post_gid"])
+        non_report_gids = np.setdiff1d(nrn["gid"], tgt_report_gids)
 
         print("Reading entire data...")
         data = _il_get(report, report_cfg, tgt_report_gids)
@@ -524,18 +525,33 @@ class TimeDependentMatrix(ConnectivityMatrix):
         pool.terminate()
         edges = pd.concat(edges, axis=0, copy=False)
 
-        # for a, b in tqdm(zip(splt[:-1], splt[1:]), total=len(splt) - 1):
-        #     chunk = read_chunk(report, report_cfg, lookup, tgt_report_gids[a:b])
-        #     df = group_chunk(chunk, report_cfg)
-        #     df.index = pd.MultiIndex.from_frame(df.index.to_frame().applymap(lambda x: lo_gids[x]))
-        #     if edges is None:
-        #         edges = df
-        #     else:
-        #         edges = pd.concat([edges, df], axis=0, copy=False)
-        
         new_idxx = pd.RangeIndex(len(edges))
         edge_ids = edges.index.to_frame().rename(columns={"pre_gid": "row", "post_gid": "col"}).set_index(new_idxx)
         edges = edges.set_index(new_idxx)
+
+        if len(non_report_gids) > 0:
+            from .circuit_models import circuit_connection_matrix
+            from .io.synapse_report import AGG_FUNCS
+            stat_edge_props = []
+            agg_funcs = list(edges.columns.levels[0])
+            print("Looking up static values for non-reported postsyn. neurons")
+            for _agg_id, agg_func_name in enumerate(agg_funcs):
+                agg = AGG_FUNCS[agg_func_name]
+                _t_codes = edges.columns.codes[1][edges.columns.codes[0] == _agg_id]  # codes 0 is time steps
+                time_stamps = edges.columns.levels[1][_t_codes]
+                M = circuit_connection_matrix(sim.circuit, for_gids=nrn["gid"], for_gids_post=non_report_gids,
+                                              edge_property=report_cfg["static_prop_name"], agg_func=agg).tocoo()
+                stat_edge_props.append(pd.DataFrame.from_dict(dict([(t, M.data) for t in time_stamps])))
+                stat_edge_props[-1].columns.name = "time"
+            stat_edge_props = pd.concat(stat_edge_props, axis=1, copy=False,
+                                        keys=agg_funcs, names=[edges.columns.names[1]])
+                                        
+            edges = edges.append(stat_edge_props[edges.columns])
+            edge_ids = pd.concat([edge_ids, pd.DataFrame.from_dict({"row": M.row, "col": M.col})], axis=0, copy=False)
+            new_idxx = pd.RangeIndex(len(edges))
+            edges = edges.set_index(new_idxx)
+            edge_ids = edge_ids.set_index(new_idxx)
+
         shape= (len(nrn), len(nrn))
         # TODO: Compare to expected edges. Find missing (i.e. unreported) edges and fill them in with static values
         return cls(edge_ids, edge_properties=edges, vertex_properties=nrn.set_index("gid"), shape=shape)

@@ -72,7 +72,10 @@ def group_chunked_data(inputs):
     new_idx["pre_gid"] = pre_gid
     data = data.loc[idx].set_index(pandas.MultiIndex.from_frame(new_idx[["pre_gid", "post_gid"]]))
     data = group_chunk(data, report_cfg)
-    data.index = pandas.MultiIndex.from_frame(data.index.to_frame().applymap(lambda x: lo_gids[x]))
+    midx_frame = data.index.to_frame()
+    for col in midx_frame.columns:  # Just a loop over 2 columns. No big deal.
+        midx_frame[col] = lo_gids[midx_frame[col]].values
+    data.index = pandas.MultiIndex.from_frame(midx_frame)
     return data
 
 
@@ -84,5 +87,12 @@ def read_and_group_chunk(inputs):
     report, report_gids = sonata_report(report_fn)
     chunk = read_chunk(report, report_cfg, lookup, tgt_report_gids)
     df = group_chunk(chunk, report_cfg)
-    df.index = pandas.MultiIndex.from_frame(df.index.to_frame().applymap(lambda x: lo_gids[x]))
+    midx_frame = df.index.to_frame()
+    for col in midx_frame.columns:  # Just a loop over 2 columns. No big deal.
+        midx_frame[col] = lo_gids[midx_frame[col]].values
+    df.index = pandas.MultiIndex.from_frame(midx_frame)
     return df
+
+
+def to_time_df(data, time_stamps):
+    pass
