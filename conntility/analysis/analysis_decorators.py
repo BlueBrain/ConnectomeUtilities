@@ -173,7 +173,7 @@ def control_by_random_sample(con_mat_obj, control_property, n_randomizations=10,
             base_val = analysis_function(matrix, nrn_df, *args, **kwargs)
             cmp_vals = [
                 analysis_function(
-                    func(nrn_df.index.values, **rand_kwargs).matrix.tocsc(),
+                    func(nrn_df["gid"], **rand_kwargs).matrix.tocsc(),
                     nrn_df, *args, **kwargs
                 ) for _ in range(n_randomizations)
             ]

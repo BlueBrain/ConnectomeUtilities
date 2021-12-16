@@ -115,6 +115,25 @@ print(M.layer)
 ```
 As specified by the filtering, all neurons are in layer 3 and have an etype of either 'cNAC' or 'bNAC'.
 
+Alternatively, we can access a DataFrame with all properties as columns:
+```
+print(M.vertices)
+          gid etype  layer    mtype            x            y            z
+0      462330  cNAC      3  L23_LBC  6084.390083   777.465669 -4025.557549
+1      462334  cNAC      3  L23_LBC  6222.630655   310.692440 -4357.496678
+2      462341  cNAC      3  L23_LBC  4558.958016 -2629.498993 -2314.064728
+3      462342  cNAC      3  L23_LBC  4704.946458 -2685.894441 -4534.629941
+4      462346  cNAC      3  L23_LBC  4912.578029  -569.522512 -2357.380419
+...       ...   ...    ...      ...          ...          ...          ...
+17565  522507  bNAC      3  L23_DBC  6324.798261  2043.804976 -3612.853939
+17566  522512  bNAC      3  L23_DBC  2313.800559  1763.196221  -816.105252
+17567  522514  bNAC      3  L23_DBC  4412.908679   663.350652 -1618.038422
+17568  522516  bNAC      3  L23_DBC  6193.731705  1385.086562 -4178.957299
+17569  522517  bNAC      3  L23_DBC  4013.916386   429.433081 -1716.702002
+
+[17570 rows x 7 columns]
+```
+
 The number of neurons is the length of the object:
 ```
 print(len(M))
@@ -442,9 +461,14 @@ An example of the first return type would be an analysis that returns the averag
 
 #### Decorating atomic analyses
 Conntility provides functionality to "get more" from such atomic analyses. To that end it provides function decorators that turn it into a more complicated, more involved analysis. Currently, the following decorators exist:
-  - **grouped_by_grouping_config**: This decorator uses a reference to a *loader config* and accesses the "grouping" entry in the config. Then it turns any analysis into one that is instead applied separately to the submatrices of the groupings defined by the config.
-  - **grouped_by_filtering_config**: This works very similarly to the previous one, but allows a bit more flexibility. It takes a list of *loader configs* and acceses their "filtering" entries. Then, each thusly defined filtering will be considered a group comprising the neurons passing the filter. Then the submatrices of these groups will be separately analyzed
+  - **grouped_presyn_by_grouping_config**: This decorator uses a reference to a *loader config* and accesses the "grouping" entry in the config. Then it turns any analysis into one that is instead applied separately to the submatrices you get when splitting it up by *presynaptic* population. That is, the split is performed along the *first* axis. The split is performed according to the groupings defined by the config.
+  - **grouped_postsyn_by_grouping_config**: Same as the previous, but splits by postsynaptic population (along the second axis).
+  - **grouped_subpop_by_grouping_config**: Same, but applies the split to both the pre- and postsynaptic side. For example, if you split by m-type, you might run an analysis one the submatrix of connectivity within L2_TPC, L3_TPC, ...
+  - **grouped_presyn_by_filtering_config, grouped_postsyn_by_filtering_config, grouped_subpop_by_filtering_config**: This works very similarly to the three previous ones, but allows a bit more flexibility. It takes a list of *loader configs* and acceses their "filtering" entries. Then, each thusly defined filtering will be considered a group comprising the neurons passing the filter. Then the submatrices of these groups will be separately analyzed
   - **control_by_randomization**: This takes an analysis and performs it once on the actual matrix, then several times on a randomized shuffled control. Then returns the actual result and the mean of the controls. To generate the controls, it takes a reference to a randomization function that can exist anywhere on the file system.
+  - **for_bidirectional_connectivity**: Applies the analysis to the symmetrical connection matrix of *only bidirectional connections*.
+  - **for undirected_connectivity**: Applies the analysis to the symmetrical connections matrix of *connections existing in either directions*.
+  - **control_by_random_sample**: To be used in together with one of the *grouped_** decorators above. It generates a control for the analysis of the various submatrices by sampling a random subpopulation of the base population. The random subpopulation has the same size and distribution of a given property (such as m-type) as the analyzed subpopulation. For details, see example below. 
 
 You can find examples for all of these further down.
 #### Dynamic import of analyses
@@ -459,7 +483,7 @@ To explain the format, I will walk you through some examples:
 
 #### Examples
 
-##### grouped_by_grouping_config
+##### grouped_*_by_grouping_config
 As an example, let's consider simplex counts. First the basic analysis:
 ```
 from conntility.analysis import Analysis
@@ -468,13 +492,16 @@ from conntility.connectivity import ConnectivityMatrix
 M = ConnectivityMatrix.from_bluepy(circ, loader_cfg)  # As in the previous examples above
 
 analysis_specs = {
-          "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
-          "method": "simplex-counts",
-          "output": "scalar"
+    "analyses":{
+        "simplex_counts": {
+            "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
+            "method": "simplex-counts",
+            "output": "scalar"
         }
-A = Analysis("simplex_counts", analysis_specs)
-A.apply(M.matrix)
-
+    }
+}
+print(M.analyze(analysis_specs))
+{'simplex_counts':
 dim
 0   1051
 1   1150
@@ -483,7 +510,7 @@ dim
 ```
 Of course you can manually just apply the analysis also to subtargets:
 ```
- A.apply(M.index("distance").lt(1600).matrix) 
+ M.index("distance").lt(1600).analyze(analysis_specs) 
 dim
 0    500
 1    342
@@ -493,19 +520,22 @@ dim
 Or we use a decorator to apply it to subtargets separately. To that end, add an entry "decorators" to the *analysis config*:
 ```
 analysis_specs = {
+    "analyses":{
+        "simplex_counts_by_mtype":{
             "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
             "method": "simplex_counts",
             "decorators": [
                 {
-                    "name": "grouped_by_grouping_config",
+                    "name": "grouped_subpop_by_grouping_config",
                     "args": [{"columns": ["mtype"], "method": "group_by_properties"}]
                 }
             ],
             "output": "scalar"
+        }
+    }
 }
-A = Analysis("simplex_counts", analysis_specs)
-A.apply(M.matrix.to_csc(), M.vertices)
-
+M.analyze(analysis_specs)
+{"simplex_counts_by_mtype":
 idx-mtype  dim
 L23_BP     0      102
            1        0
@@ -525,7 +555,7 @@ L23_SBC    0      119
 We see that the analysis has now been performed for all mtypes separately. As a sanity check we can do some filtering beforehand:
 ```
 subM = M.index("mtype").eq("L23_SBC")
-A.apply(subM.matrix.tocsc(), subM.vertices)
+subM.analyze(analysis_specs)
 
 idx-mtype  dim
 L23_SBC    0      119
@@ -536,7 +566,9 @@ L23_SBC    0      119
 ```
 As expected, now only a single result consistent with the previous one is returned due to the prior filtering by m-type.
 
-##### grouped_by_filtering_config
+**grouped_presyn_by_grouping_config** and **grouped_postsyn_by_grouping_config** work similarly, but split matrices differently.
+
+##### grouped_*_by_filtering_config
 The previous decorator has one disadvantage: The groupings defined as above are all partitions. That is, each neuron of the base (filtered) population is part of one and exactly one group. This certainly does not cover all use cases.
 
 A more flexible (albeit slightly more complicated) decorator is *group_by_filtering_config*. The user provides a list of "filtering" blocks of loader configs. Each provided "filtering" block is then considered one group, comprising the neurons that pass the filter. Instead of providing only the "filtering" block, a user can also provide an entire loader config; in that case all but the "filtering" block will be ignored.
@@ -544,6 +576,8 @@ A more flexible (albeit slightly more complicated) decorator is *group_by_filter
 Let's look at an example with overlapping groups:
 ```
 analysis_specs = {
+    "analyses":{
+        "simplex_counts_filtered":{
             "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
             "method": "simplex_counts",
             "decorators": [
@@ -568,11 +602,11 @@ analysis_specs = {
                 }
             ],
             "output": "scalar"
+        }
+    }
 }
 
-A = Analysis("simplex_counts", analysis_specs)
-
-A.apply(M.matrix.tocsc(), M.vertices)
+M.analyze(analysis_specs)
 
 mtype                   dim
 ['L23_BP', 'L23_SBC']   0      221
@@ -591,6 +625,8 @@ dtype: int64
 We see that the analysis was applied to the submatrices of L23_BP + L23_SBC and to L23_LBC + L23_SBC, which overlap in L23_SBC. As before, we can use an "include" statement to use pre-defined neuron groups from another file and thus drastically simplify the configuration.
 ```
 analysis_specs = {
+    "analyses":{
+        "simplex_counts_filtered":{
             "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
             "method": "simplex_counts",
             "decorators": [
@@ -602,11 +638,11 @@ analysis_specs = {
                 }
             ],
             "output": "scalar"
+        }
+    }
 }
 
-A = Analysis("simplex_counts", analysis_specs)
-
-A.apply(M.matrix.tocsc(), M.vertices)
+M.analyze(analysis_specs)
 
 group name    dim
 in_assembly1  0       20
@@ -628,6 +664,8 @@ print(M.in_assembly2)
 We can use that property instead of loading the assemblies again in the *analysis config*. 
 ```
 analysis_specs = {
+    "analyses":{
+        "simplex_counts_filtered":{
             "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
             "method": "simplex_counts",
             "decorators": [
@@ -652,10 +690,10 @@ analysis_specs = {
                 }
             ],
             "output": "scalar"
+        }
+    }
 }
-A = Analysis("simplex_counts", analysis_specs)
-
-A.apply(M.matrix.tocsc(), M.vertices)
+M.analyze(analysis_specs)
 in_assembly1  in_assembly2  dim
 1             nan           0       20
                             1        0
@@ -668,6 +706,8 @@ We can also use this to analyze the group of neurons that are neither part of as
 Also, you might have noted that the output of these analyses uses a MultiIndex that is automatically assembled from the filter specification. It uses the values of "column" and the valid values. In some cases, it is more useful to directly specify a name for the group defined by a filtering. For example, when you specify a long list of gids, the automatically assembled name would be excessively long. You can do this, as previously (see above) by providing an entry "name" as the same level as "filtering":
 ```
 analysis_specs = {
+    "analyses":{
+        "simplex_counts_filtered":{
             "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
             "method": "simplex_counts",
             "decorators": [
@@ -702,12 +742,11 @@ analysis_specs = {
                 }
             ],
             "output": "scalar"
+        }
+    }
 }
 
-A = Analysis("simplex_counts", analysis_specs)
-
-A.apply(M.matrix.tocsc(), M.vertices)
-Out[15]: 
+M.analyze(analysis_specs)
 group name       dim
 in_neither       0      1011
                  1      1073
@@ -729,7 +768,7 @@ To make full use of this randomization, it is important to understand that the d
 [...]
             "decorators": [
                 {
-                    "name": "grouped_by_grouping_config",
+                    "name": "grouped_subpop_by_grouping_config",
                     "args": [{"columns": ["mtype"], "method": "group_by_properties"}]
                 },
                 {
@@ -749,7 +788,7 @@ To make full use of this randomization, it is important to understand that the d
                 }
             ],
 [...]
-A.apply(M.matrix.tocsc(), M.vertices)
+M.analyze(analysis_specs)
 Control    idx-mtype  dim
 data       L23_BP     0      102.000000
                       1        0.000000
@@ -765,3 +804,116 @@ We see that we now get a breakdown both by mtype and by data vs. control.
 And it gets even more powerful: Let's build an analysis where the entire matrix is analyzed as one, but in the control we apply an ER-randomization separately for submatrices of each m-type pathway (stochastic block model):
 
 **TODO**: This needs to be implemented.
+
+##### control_by_random_sampling
+This is a complicated one. It is an alternative to creating stochastic controls by fitting a random model (such as ER) to the data. Instead, we assume that the population to be analyzed is a subpopulation of a larger parent population. Then we generate a control by sampling the same nuber of vertices from the parent population. Additionally, we ensure that the random subpopulation matches the analyzed population in terms of their values of one vertex property.
+
+But how and where do we get a parent and a subpopulation? For that you will probably want to use one of the "grouped_*" decorators listed above. If you combine this decorator with one of those, then the generated groups will be considered as the subpopulations and the entire matrix as the parent population. Using the decorator without a grouping, will result in the entire matrix being both the parent and subpopulation, which will work technically, but makes no sense.
+
+As an example let's group by m-type, then generate randomly sampled subpopulation with the same distributions of e-types:
+```
+analysis_specs = {
+    "analyses": {
+        "simplex_counts": {
+            "source":"/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
+            "args": [],
+            "kwargs": {},
+            "method": "simplex_counts",
+            "decorators": [
+                {
+                    "name": "grouped_presyn_by_grouping_config",
+                    "args": [{"columns": ["mtype"], "method": "group_by_properties"}]
+                },
+                {
+                    "name": "control_by_random_sample",
+                    "args": ["ConnectivityMatrix", "etype"],
+                    "kwargs": {"n_randomizations": 3}
+                }
+            ],
+            "output": "Series"
+        }
+    }
+}
+
+M.analyze(analysis_specs)
+{'simplex_counts': 
+Control           idx-mtype  dim
+ data              L1_DAC     0       498.000000
+                              1      2163.000000
+                              2        74.000000
+                              3       140.000000
+                              4         8.000000
+[...]
+sampled_by_etype  L1_DAC     0       498.000000
+                              1      1748.333333
+                              2       189.666667
+                              3       152.333333
+                              4        27.666667
+[...]
+```
+Here, "sampled_by_etype  L1_DAC" is a control of randomly sampled neurons that have the same distribution of e-types as the L1_DAC neurons. Note that the 0th dimension is identical by construction -- the control samples the same number of neurons.
+
+In "analysis_specs" above, note that the "grouping" decorator must be listed *before* "control_by_random_sample". The decorator takes two additional "args": The first one must always be a string called "ConnectivityMatrix" for technical reasons (that is a magic string that will be replaced with a reference to the actual ConnectivityMatrix object by the analysis executor); the second one is the property that you wish to preserve in the random sampling.
+
+#### Using decorators without "ConnectivityMatrix" objects
+So far, we applied these analyses through the .analyze function of a "ConnectivityMatrix". But the decorators, and analysis configurations explained above can also be used on connectivity that is differently formated. All that is required as input is information on:
+  1. The connectivity graph between vertices in the form of a scipy.sparse.csc_matrix (or csr_matrix), and
+  2. A pandas.DataFrame that has the properties associated with vertices in the columns
+
+To illustrate this, let's try to find an equivalent way to run ConnectivityMatrix.analyze(). Let M be a ConnectivityMatrix. Then:
+```
+analysis_specs = {
+    "analyses":{
+        "simplex_counts": {
+            "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
+            "method": "simplex-counts",
+            "output": "scalar"
+        }
+    }
+}
+M.analyze(analysis_specs)
+```
+is equivalent to:
+```
+from conntility.analysis import Analysis
+
+analysis_name = "simplex_counts"
+A = Analysis(analysis_name, analysis_specs["analyses"][analysis_name])
+
+A.apply(M.matrix.tocsc(), M.vertices)
+```
+where "M.matrix.tocsc()" creates the matrix of the connectivity graph and "M.vertices" the DataFrame of neuron properties. But in principle any source can be used as a data source.
+
+**Exception**
+The "control_by_random_sample" decorator is a bit more complicated. As it uses functionality implemented in the "ConnectivityMatrix" class, it must be used in conjunction with the class. Purely for your information, here is how you would use it more manually:
+```
+from conntility.analysis import Analysis
+from conntility.analysis import analysis_decorators
+
+analysis_specs = {
+    "analyses":{
+        "simplex_counts": {
+            "source": "/gpfs/bbp.cscs.ch/project/proj83/home/sood/analyses/manuscript/topological-analysis-subvolumes/topologists_connectome_analysis/library/topology.py",
+            "method": "simplex-counts",
+            "output": "scalar"
+        }
+    }
+}
+analysis_name = "simplex_counts"
+A = Analysis(analysis_name, analysis_specs["analyses"][analysis_name])
+
+subM = M.index("mtype").eq("L1_DAC")
+analysis_decorators.control_by_random_sample(M, "etype")(A.apply)(subM.matrix.tocsc(), subM.vertices)
+Control           dim
+data              0      498.0
+                  1      483.0
+                  2      131.0
+                  3       85.0
+                  4        2.0
+sampled_by_etype  0      498.0
+                  1      315.4
+                  2      158.4
+                  3       90.0
+                  4       25.9
+dtype: float64
+```
