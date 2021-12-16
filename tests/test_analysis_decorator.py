@@ -74,7 +74,8 @@ def test_manual_filtering_config():
 
 
 def test_analysis_with_control_sample():
-    C = ConnectivityMatrix(M, vertex_properties=nrn)
+    _nrn = pandas.concat([nrn, pandas.Series(nrn.index, name="gid")], axis=1, copy=False)
+    C = ConnectivityMatrix(M, vertex_properties=_nrn)
     res = C.analyze(os.path.join(TEST_DATA_DIR, "test_analysis_control_sample.json"))
     sc = res["simplex_counts"]
     assert "sampled_by_mtype" in sc
