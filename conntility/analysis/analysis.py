@@ -97,16 +97,14 @@ class SingleMethodAnalysisFromSource:
         """..."""
         self._name = name
         self._root = resolve_at
-        self._description = _resolve_includes(description)
+        self._description = _resolve_includes(description, resolve_at=self._root)
         self._source = self.read_source(description)
         self._args = self.read_args(description)
         self._kwargs = self.read_kwargs(description)
         self._method = self.read_method(description)
+        self._decoration = self.read_decorators(description)
         self._output_type = self.read_output_type(description)
-        self._analysis = self.decorate(
-            self.load(description),
-            description
-        )
+        self._analysis = self.load(description)
         self._collection_policy = self.read_collection(description)
 
     @property
@@ -150,33 +148,44 @@ class SingleMethodAnalysisFromSource:
         self._module = module
         return method
     
-    def decorate(self, analysis, description):
+    def decorate(self, analysis, lst_decorators, **kwargs):
         from . import analysis_decorators
-        lst_decorators = self.read_decorators(description)
         for decorator in lst_decorators:
             dec_func = getattr(analysis_decorators, decorator["name"])
-            args = decorator.get("args", [])
+            args = decorator.get("args", []).copy()
+
+            for i in range(len(args)):  # To be used to insert dynamic arguments to decorators
+                if isinstance(args[i], str):
+                    if args[i] in kwargs:
+                        args.insert(i, kwargs[args.pop(i)])
+            
             if "analysis_arg" in decorator:
                 args = [
-                    SingleMethodAnalysisFromSource(k, v) for k, v in decorator["analysis_arg"].items()
+                    SingleMethodAnalysisFromSource(k, v, resolve_at=self._root)
+                    for k, v in decorator["analysis_arg"].items()
                 ] + args
             analysis = dec_func(*args, **decorator.get("kwargs", {}))(analysis)
         return analysis
 
     def apply(self, adjacency, node_properties=None, log_info=None):
         """..."""
+        from .. import ConnectivityMatrix
         if log_info:
             LOG.info("APPLY %s", log_info)
-        try:
-            matrix = adjacency.matrix
-        except AttributeError:
-            matrix = adjacency
+        decoration_kwargs = {}
+        if isinstance(adjacency, ConnectivityMatrix):
+            decoration_kwargs["ConnectivityMatrix"] = adjacency
+            node_properties = adjacency.vertices
+            adjacency = adjacency.matrix.tocsc()
+        elif hasattr(adjacency, "matrix"):
+            adjacency = adjacency.matrix
 
         if node_properties is not None:
-            assert node_properties.shape[0] == matrix.shape[0]
+            assert node_properties.shape[0] == adjacency.shape[0]
 
-        result = self._analysis(matrix, node_properties,
-                              *self._args, **self._kwargs)
+        result = self.decorate(self._analysis, self._decoration, **decoration_kwargs)(
+            adjacency, node_properties, *self._args, **self._kwargs
+        )
 
         if log_info:
             LOG.info("Done %s", log_info)

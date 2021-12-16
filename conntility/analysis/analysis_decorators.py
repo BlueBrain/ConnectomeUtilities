@@ -131,18 +131,49 @@ def _grouped_by_filtering_config(lst_fltr_cfg, matrix_func):
     return decorator
 
 def control_by_randomization(randomization, n_randomizations=10, **rand_kwargs):
+    if hasattr(randomization, "apply"):
+        func = randomization.apply
+        rand_name = randomization.name
+    else:
+        func = randomization
+        rand_name = "randomized"
     def decorator(analysis_function):
         def out_function(matrix, nrn_df, *args, **kwargs):
-            if hasattr(randomization, "apply"):
-                func = randomization.apply
-                rand_name = randomization.name
-            else:
-                func = randomization
-                rand_name = "randomized"
             base_val = analysis_function(matrix, nrn_df, *args, **kwargs)
             cmp_vals = [
                 analysis_function(
                     func(matrix, nrn_df, **rand_kwargs),
+                    nrn_df, *args, **kwargs
+                ) for _ in range(n_randomizations)
+            ]
+            if isinstance(base_val, pandas.Series):
+                cmp_vals = pandas.concat(cmp_vals, axis=1).mean(axis=1)
+                return pandas.concat(
+                    [base_val, cmp_vals], axis=0, copy=False,
+                    keys=["data", rand_name], names=["Control"]
+                )
+            cmp_vals = numpy.nanmean(cmp_vals)
+            return pandas.Series([base_val, cmp_vals], index=["data", rand_name])
+        return out_function
+    return decorator
+
+
+def control_by_random_sample(con_mat_obj, control_property, n_randomizations=10, sample_func=None, **rand_kwargs):
+    from .. import ConnectivityMatrix
+    assert isinstance(con_mat_obj, ConnectivityMatrix), "This decorator must be used through ConnectivityMatrix.analyze!"
+    ctrl_index = con_mat_obj.index(control_property)
+    if sample_func is None:
+        func = ctrl_index.random
+    else:
+        func = getattr(ctrl_index, sample_func)
+    rand_name = "sampled_by_" + control_property
+    
+    def decorator(analysis_function):
+        def out_function(matrix, nrn_df, *args, **kwargs):
+            base_val = analysis_function(matrix, nrn_df, *args, **kwargs)
+            cmp_vals = [
+                analysis_function(
+                    func(nrn_df.index.values, **rand_kwargs).matrix.tocsc(),
                     nrn_df, *args, **kwargs
                 ) for _ in range(n_randomizations)
             ]

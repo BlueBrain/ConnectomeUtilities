@@ -22,6 +22,10 @@ class _MatrixNodeIndexer(object):
     def __init__(self, parent, prop_name):
         self._parent = parent
         self._prop = parent._vertex_properties[prop_name]
+        if isinstance(self._prop.dtype, int) or isinstance(self._prop.dtype, float):
+            self.random = self.random_numerical
+        else:
+            self.random = self.random_categorical
 
     def eq(self, other):
         pop = self._parent._vertex_properties.index.values[self._prop == other]
@@ -392,7 +396,7 @@ class ConnectivityMatrix(object):
         analyses = get_analyses(analysis_recipe)
         res = {}
         for analysis in analyses:
-            res[analysis._name] = analysis.apply(self.matrix.tocsc(), self.vertices)
+            res[analysis._name] = analysis.apply(self)
         return res
 
 

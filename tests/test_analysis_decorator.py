@@ -8,6 +8,7 @@ from scipy import sparse
 
 
 from conntility import analysis as test_module
+from conntility import ConnectivityMatrix
 
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,6 +26,8 @@ M = sparse.csc_matrix(random.rand(sz, sz) < 0.06)
 
 with open(os.path.join(TEST_DATA_DIR, "test_analysis_config.json"), "r") as fid:
     ana_cfg_raw = json.load(fid)
+with open(os.path.join(TEST_DATA_DIR, "test_analysis_control_sample.json"), "r") as fid:
+    ana_cfg_sample = json.load(fid)
 
 def test_analysis_by_config():
     ana_cfg = ana_cfg_raw.copy()
@@ -68,3 +71,12 @@ def test_manual_filtering_config():
     result = decorator(lst_filters)(base_function)(M, nrn)
     assert len(result) == len(lst_filters)
     assert (nrn["etype"] == 2).sum() + len(nrn) == result.sum()  # Overlap in etype==2
+
+
+def test_analysis_with_control_sample():
+    C = ConnectivityMatrix(M, vertex_properties=nrn)
+    res = C.analyze(os.path.join(TEST_DATA_DIR, "test_analysis_control_sample.json"))
+    sc = res["simplex_counts"]
+    assert "sampled_by_mtype" in sc
+    assert ("sampled_by_mtype", "in_assembly2") in sc
+    assert ("sampled_by_mtype", "in_assembly2", 0) in sc

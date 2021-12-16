@@ -1,28 +1,32 @@
 import numpy
 import pandas
+import os
 
 from . import make_groups
 from . import load_neurons
 from .from_atlas import atlas_property
 
-def _read_if_needed(cfg_or_dict):
-    if isinstance(cfg_or_dict, str):
+def _read_if_needed(cfg_or_dict, resolve_at=None):
+    if isinstance(cfg_or_dict, str) or isinstance(cfg_or_dict, os.PathLike):
+        if not os.path.isfile(cfg_or_dict) and resolve_at is not None:
+            cfg_or_dict = os.path.join(resolve_at, cfg_or_dict)
         import json
+        resolve_at = os.path.split(os.path.abspath(cfg_or_dict))[0]
         with open(cfg_or_dict, "r") as fid:
             cfg = json.load(fid)
     else:
         cfg = cfg_or_dict
-    cfg = _resolve_includes(cfg)
+    cfg = _resolve_includes(cfg, resolve_at=resolve_at)
     return cfg
 
-def _resolve_includes(cfg):
+def _resolve_includes(cfg, resolve_at=None):
     if isinstance(cfg, dict):
         if "include" in cfg:
-            return _read_if_needed(cfg["include"])
+            return _read_if_needed(cfg["include"], resolve_at=resolve_at)
         for k, v in cfg.items():
-            cfg[k] = _resolve_includes(v)
+            cfg[k] = _resolve_includes(v, resolve_at=resolve_at)
     elif isinstance(cfg, list):
-       cfg = [_resolve_includes(v) for v in cfg]
+       cfg = [_resolve_includes(v, resolve_at=resolve_at) for v in cfg]
     return cfg
 
 

@@ -1,0 +1,22 @@
+{
+    "analyses": {
+        "simplex_counts": {
+            "source":"random_simplex_counts.py",
+            "args": [],
+            "kwargs": {},
+            "method": "simplex_counts",
+            "decorators": [
+                {
+                    "name": "grouped_by_filtering_config",
+                    "args": [{"include": "test_list_filtering_config.json"}]
+                },
+                {
+                    "name": "control_by_random_sample",
+                    "args": ["ConnectivityMatrix", "mtype"],
+                    "kwargs": {"n_randomizations": 3}
+                }
+            ],
+            "output": "Series"
+        }
+    }
+}
