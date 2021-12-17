@@ -167,13 +167,14 @@ def control_by_random_sample(con_mat_obj, control_property, n_randomizations=10,
     else:
         func = getattr(ctrl_index, sample_func)
     rand_name = "sampled_by_" + control_property
+    index_property = con_mat_obj._vertex_properties.index.name or "index"
     
     def decorator(analysis_function):
         def out_function(matrix, nrn_df, *args, **kwargs):
             base_val = analysis_function(matrix, nrn_df, *args, **kwargs)
             cmp_vals = [
                 analysis_function(
-                    func(nrn_df["gid"], **rand_kwargs).matrix.tocsc(),
+                    func(nrn_df[index_property], **rand_kwargs).matrix.tocsc(),  # TODO: Or maybe just give nrn_df without GID
                     nrn_df, *args, **kwargs
                 ) for _ in range(n_randomizations)
             ]

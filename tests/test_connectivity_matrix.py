@@ -134,3 +134,49 @@ def test_time_dependent_matrix():
     assert Mb._time == M._time
     assert Mb.at_time(20.0).filter().lt(0.2).matrix.nnz == 96
 
+def test_random_edge_sampling():
+    N = 500
+    E = int(0.05 * N * (N - 1))
+
+    edge_ids = pandas.DataFrame.from_dict(
+        {
+            "row": numpy.random.randint(0, N, size=E),
+            "col": numpy.random.randint(0, N, size=E)
+        }
+    ).drop_duplicates()
+
+    vertex_props = pandas.DataFrame(
+        numpy.random.randint(0, 5, size=(N, 3)),
+        columns=["foo", "bar", "meh"],
+        index=pandas.RangeIndex(200, 200 + N)
+    )
+    edge_properties = numpy.random.rand(len(edge_ids))
+    edge_properties[vertex_props["foo"].iloc[edge_ids["row"]] < 2] += 100
+
+    M = test_module.ConnectivityMatrix(edge_ids, vertex_properties=vertex_props,
+                                       edge_properties=edge_properties)
+    
+    subpop = M.index("foo").lt(2)
+    assert subpop.edges[subpop._default_edge].mean() > 99
+    ctrlpop = M.filter().random_by_vertex_property(subpop, "bar")
+    ctrlpop2 = M.filter().random_by_vertex_property_ids(subpop.gids, "bar")
+    ctrlpop2 = M.subedges(ctrlpop2)
+    assert (ctrlpop.edges.mean() < subpop.edges.mean()).all()  # Strictly not 100% guaranteed, but likely
+    assert (ctrlpop2.edges.mean() < subpop.edges.mean()).all()
+
+    A = subpop.edge_associated_vertex_properties("bar").value_counts()
+    B = ctrlpop.edge_associated_vertex_properties("bar").value_counts()
+    C = ctrlpop2.edge_associated_vertex_properties("bar").value_counts()
+    assert (A == B).all() and (A == C).all()
+
+    subpop = M.filter().lt(90)
+    eavp = subpop.edge_associated_vertex_properties("foo")
+    assert not (eavp["row"] < 2).any()
+    manual_fltr = M.edges[M._default_edge] < 90
+    ctrlpop = M.filter().random_by_vertex_property(subpop, "meh")
+    ctrlpop2 = M.filter().random_by_vertex_property(manual_fltr, "meh")
+
+    A = subpop.edge_associated_vertex_properties("meh").value_counts()
+    B = ctrlpop.edge_associated_vertex_properties("meh").value_counts()
+    C = ctrlpop2.edge_associated_vertex_properties("meh").value_counts()
+    assert (A == B).all() and (A == C).all()

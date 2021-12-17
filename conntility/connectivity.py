@@ -92,7 +92,7 @@ class _MatrixNodeIndexer(object):
 class _MatrixEdgeIndexer(object):
     def __init__(self, parent, prop_name):
         self._parent = parent
-        self._prop = parent.edges[prop_name]
+        self._prop = parent.edges[prop_name].values
 
     def eq(self, other):
         idxx = self._prop == other
@@ -121,6 +121,35 @@ class _MatrixEdgeIndexer(object):
     def full_sweep(self, direction='decreasing'):
         #  For an actual filtration. Take all values and sweep
         raise NotImplementedError()
+    
+    def random_by_vertex_property_ids(self, ref, prop_name, n_bins=None, is_edges=False):
+        if isinstance(ref, ConnectivityMatrix):
+            assert np.all(np.in1d(ref.gids, self._parent.gids))
+        else:
+            if is_edges:
+                ref = self._parent.subedges(ref)
+            else:
+                try:
+                    ref = self._parent.subpopulation(self._parent.__extract_vertex_ids__(ref))
+                    print("Interpreting reference as vertex ids. If that is wrong, set is_edges=True")
+                except (AssertionError, IndexError):
+                    ref = self._parent.subedges(ref)
+                    print("Interpreting reference as edge ids!")
+
+        ref_edges = ref.edge_associated_vertex_properties(prop_name)
+        ref_counts = ref_edges.value_counts()
+
+        parent_edges = self._parent.edge_associated_vertex_properties(prop_name)
+        parent_edges = parent_edges.reset_index().set_index(["row", "col"])["index"]
+
+        out_edges = []
+        for _idx, n in ref_counts.iteritems():
+            out_edges.extend(np.random.choice(parent_edges[_idx].values, n, replace=False))
+        return out_edges
+    
+    def random_by_vertex_property(self, ref, prop_name, n_bins=None):
+        edge_ids = self.random_by_vertex_property_ids(ref, prop_name, n_bins=n_bins)
+        return self._parent.subedges(edge_ids)
 
 
 class ConnectivityMatrix(object):
@@ -186,6 +215,7 @@ class ConnectivityMatrix(object):
 
         # TODO: calling it "gids" might be too BlueBrain-specific! Change name?
         self.gids = self._vertex_properties.index.values
+        # TODO: Additional tests, such as no duplicate edges!
 
     def __len__(self):
         return len(self.gids)
@@ -205,6 +235,8 @@ class ConnectivityMatrix(object):
             assert np.all(new_values.row == self._edge_indices["row"]) and np.all(new_values.col == self._edge_indices["col"])
             self._edges[new_label] = new_values.data
         else:
+            if hasattr(new_values, "values"):
+                new_values = new_values.values
             assert len(new_values) == len(self._edge_indices)
             self._edges[new_label] = new_values
     
@@ -223,7 +255,7 @@ class ConnectivityMatrix(object):
                                  when instantiating vertex_properties explicitly""")
             self._vertex_properties = vertex_properties
         else:
-            raise ValueError("""When specifying vertex properties it must be a DataFrame or dict""")
+            raise ValueError("""When specifying vertex properties provide a DataFrame or dict""")
         assert len(self._vertex_properties) == self._shape[0]
 
     def __make_lookup__(self):
@@ -250,6 +282,15 @@ class ConnectivityMatrix(object):
     @property
     def vertex_properties(self):
         return self._vertex_properties.columns.values
+    
+    def edge_associated_vertex_properties(self, prop_name):
+        assert prop_name in self.vertex_properties, "{0} is not a vertex property: {1}".format(prop_name, self.vertex_properties)
+        eavp = pd.concat(
+            [self.vertices[prop_name][self._edge_indices[_idx]].rename(_idx).reset_index(drop=True)
+             for _idx in self._edge_indices.columns],
+             axis=1, copy=False
+        )
+        return eavp
     
     def matrix_(self, edge_property=None):
         if edge_property is None:
@@ -326,6 +367,7 @@ class ConnectivityMatrix(object):
         if gids is not None:
             nrn = nrn.loc[nrn.index.intersection(gids)]
         # TODO: think a bit about if it should even be possible to call this for a projection (remove arg. if not...)
+        # TODO: Add option to look up synapse properties here
         mat = circuit_connection_matrix(circ, for_gids=nrn.index.values, connectome=connectome)
         return cls(mat, vertex_properties=nrn)
 
@@ -358,20 +400,20 @@ class ConnectivityMatrix(object):
 
         out_edges = self._edges.iloc[subindex.data]
         out_vertices = self._vertex_properties.loc[subpop_ids]
+        # TODO: This will result in indices of _edge_indices and _edges by different.
+        # That is OK, because the indices are never used. But still, might want to revisit...
         return self.__class__(subindex.row, subindex.col, vertex_properties=out_vertices,
                                   edge_properties=out_edges, default_edge_property=self._default_edge,
                                   shape=(len(subpop_ids), len(subpop_ids)))
 
     def subedges(self, subedge_indices):
         """A ConnectivityMatrix object representing the specified subpopulation"""
-        row_indices = self._edge_indices["row"][subedge_indices]
-        col_indices = self._edge_indices["col"][subedge_indices]
+        if isinstance(subedge_indices, pd.Series):
+            subedge_indices = subedge_indices.values
+        rowcol = self._edge_indices.iloc[subedge_indices]
+        out_edges = self._edges.iloc[subedge_indices]
 
-        if subedge_indices.dtype == bool:
-            out_edges = self._edges[subedge_indices]
-        else:
-            out_edges = self._edges.iloc[subedge_indices]
-        return self.__class__(row_indices, col_indices, vertex_properties=self._vertex_properties,
+        return self.__class__(rowcol["row"], rowcol["col"], vertex_properties=self._vertex_properties,
         edge_properties=out_edges, default_edge_property=self._default_edge, shape=self._shape)
 
     def random_n_gids(self, ref):
