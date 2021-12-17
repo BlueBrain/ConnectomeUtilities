@@ -137,9 +137,15 @@ class _MatrixEdgeIndexer(object):
                     print("Interpreting reference as edge ids!")
 
         ref_edges = ref.edge_associated_vertex_properties(prop_name)
-        ref_counts = ref_edges.value_counts()
-
         parent_edges = self._parent.edge_associated_vertex_properties(prop_name)
+
+        if n_bins is not None:
+            mn, mx = np.min(parent_edges.values.flat), np.max(parent_edges.values.flat)
+            bins = np.linspace(mn, mx + (mx - mn) / 1E9, n_bins + 1)
+            ref_edges = ref_edges.apply(np.digitize, axis=0, bins=bins)
+            parent_edges = parent_edges.apply(np.digitize, axis=0, bins=bins)
+
+        ref_counts = ref_edges.value_counts()
         parent_edges = parent_edges.reset_index().set_index(["row", "col"])["index"]
 
         out_edges = []
