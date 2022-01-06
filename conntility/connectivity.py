@@ -1,12 +1,9 @@
-# -*- coding: utf-8 -*-
 """
-Class to get, save and load connection matrix and sample submatrices from it
+Classes to get, save and load (static or time dependent) connection matrices and sample submatrices from them
 authors: Michael Reimann, András Ecker
-last modified: 11.2021
+last modified: 01.2022
 """
 
-from json import load
-from operator import ne
 import h5py
 import numpy as np
 import pandas as pd
@@ -447,7 +444,6 @@ class ConnectivityMatrix(object):
             res[analysis._name] = analysis.apply(self)
         return res
 
-
     @classmethod
     def from_h5(cls, fn, group_name=None, prefix=None):
         if prefix is None:
@@ -483,8 +479,22 @@ class ConnectivityMatrix(object):
             data_grp.attrs["NEUROTOP_CLASS"] = "ConnectivityMatrix"
 
 
+def _update_load_config(load_cfg, sim_tgt):
+    from .circuit_models.neuron_groups.grouping_config import _read_if_needed
+    load_config = _read_if_needed(load_cfg)
+    if load_config is None:
+        load_config = {"loading": {"base_target": sim_tgt}}
+    elif "loading" in load_config:
+        if "base_target" not in load_config["loading"]:
+            load_config["loading"]["base_target"] = sim_tgt
+    else:  # why is this part necessary?
+        load_config["base_target"] = sim_tgt
+    return load_config
+
+
 class TimeDependentMatrix(ConnectivityMatrix):
-    def __init__(self, *args, vertex_labels=None, vertex_properties=None, edge_properties=None, default_edge_property=None, shape=None):
+    def __init__(self, *args, vertex_labels=None, vertex_properties=None,
+                 edge_properties=None, default_edge_property=None, shape=None):
         if len(args) == 1 and isinstance(args[0], np.ndarray) or isinstance(args[0], sparse.spmatrix):
             raise ValueError("TimeDependentMatrix can only be initialized by edge indices and edge properties")
         if isinstance(edge_properties, dict):
@@ -511,8 +521,8 @@ class TimeDependentMatrix(ConnectivityMatrix):
         if default_edge_property is None:
             default_edge_property = edge_properties.columns.levels[1][0]
         self._time = edge_properties.columns.levels[0].min()
-        super().__init__(*args, vertex_labels=vertex_labels, vertex_properties=vertex_properties, edge_properties=edge_properties,
-                         default_edge_property=default_edge_property, shape=shape)
+        super().__init__(*args, vertex_labels=vertex_labels, vertex_properties=vertex_properties,
+                         edge_properties=edge_properties, default_edge_property=default_edge_property, shape=shape)
     
     @property
     def edges(self):
@@ -526,7 +536,6 @@ class TimeDependentMatrix(ConnectivityMatrix):
         return self
     
     def add_edge_property(self, new_label, new_values):
-        # TODO: Implement
         raise NotImplementedError("Not yet implemented for TimeDependentMatrix")
     
     def default(self, new_default_property, copy=True):
@@ -535,86 +544,56 @@ class TimeDependentMatrix(ConnectivityMatrix):
         return ret
     
     @classmethod
-    def from_report(cls, sim, report_cfg, presyn_mapping=None, load_config=None, n_jobs=-1):
-        from .io.synapse_report import presyn_gid_lookup, report_fn, sonata_report, _il_get, group_chunked_data
-        from .circuit_models.neuron_groups.grouping_config import _read_if_needed
+    def from_report(cls, sim, report_cfg, load_cfg=None, presyn_mapping=None):
+        from .io.synapse_report import sonata_report, load_report, get_presyn_mapping, reindex_report, aggregate_data
         from .circuit_models.neuron_groups.grouping_config import load_filter
-        import multiprocessing as mp
 
-        if presyn_mapping is None:
-            raise NotImplementedError("Must provide precalculated mapping!")
-
-        load_config = _read_if_needed(load_config)
-        sim_tgt = sim.config.Run["CircuitTarget"]
-        if load_config is None:
-            load_config = {"loading": {"base_target": sim_tgt}}
-        elif "loading" in load_config:
-            load_config["loading"]["base_target"] = sim_tgt
-        else:
-            load_config["base_target"] = sim_tgt
-        
-        ## TODO: What if the report is not on the local connectome?
-        #baseM = ConnectivityMatrix.from_bluepy(sim.circuit, load_config=load_config)
+        load_config = _update_load_config(load_cfg, sim.config.Run["CircuitTarget"])
         nrn = load_filter(sim.circuit, load_config)
-
-        # lo_gids = dict([(g, i) for i, g in enumerate(baseM.gids)])
         lo_gids = pd.Series(range(len(nrn["gid"])), index=nrn["gid"])
-        lookup = presyn_gid_lookup(presyn_mapping, nrn["gid"])
+        # TODO: What if the report is not on the local connectome?
 
-        report_filename = report_fn(sim, report_cfg)
-        print("Will read report at {0}...".format(report_filename))
-        report, report_gids = sonata_report(report_filename)
+        report, report_gids = sonata_report(sim, report_cfg)
         tgt_report_gids = np.intersect1d(nrn["gid"], report_gids)
-        tgt_report_gids = np.intersect1d(tgt_report_gids, lookup.index.to_frame()["post_gid"])
         non_report_gids = np.setdiff1d(nrn["gid"], tgt_report_gids)
+        data = load_report(report, report_cfg, tgt_report_gids)  # load only target post_gids
 
-        print("Reading entire data...")
-        data = _il_get(report, report_cfg, tgt_report_gids)
-        print("Done! Preparing chunks...")
+        if presyn_mapping is None or len(tgt_report_gids) < len(report_gids):
+            # the saved mapping is defined based on the full report, so if parts are loaded one would need to filter
+            # the mapping as well at which point, it's faster to just recalculate the whole thing
+            presyn_mapping = get_presyn_mapping(sim.circuit.config["connectome"], data.index)
+        if not isinstance(presyn_mapping, pd.DataFrame):
+            presyn_mapping = pd.read_pickle(presyn_mapping)
 
-        n_jobs = mp.cpu_count() - 1 if n_jobs == -1 else n_jobs
-        splt = np.linspace(0, len(tgt_report_gids), n_jobs + 1).astype(int)
-        chunked_gids = [tgt_report_gids[a:b] for a, b in zip(splt[:-1], splt[1:])]
-        print("Building chunks...")
-        in_chunks = [
-            (data.loc[_gids], report_cfg, lookup.loc[_gids], lo_gids)
-            for _gids in chunked_gids
-        ]
-        pool = mp.Pool(processes=n_jobs)
-        print("Executing...")
-        edges = pool.map(group_chunked_data, in_chunks)
-        pool.terminate()
-        edges = pd.concat(edges, axis=0, copy=False)
+        data = reindex_report(data, presyn_mapping)
+        data = data.iloc[data.index.get_level_values(0).isin(nrn["gid"])]  # filter to have only target pre_gids
+        print("Report read! Starting aggregation of {0} data points...".format(data.shape))
 
-        new_idxx = pd.RangeIndex(len(edges))
-        edge_ids = edges.index.to_frame().rename(columns={"pre_gid": "row", "post_gid": "col"}).set_index(new_idxx)
-        edges = edges.set_index(new_idxx)
+        edges = aggregate_data(data, report_cfg, lo_gids)
 
         if len(non_report_gids) > 0:
             from .circuit_models import circuit_connection_matrix
-            from .io.synapse_report import AGG_FUNCS
-            stat_edge_props = []
+            print("Looking up static values for non-reported postsynaptic neurons...")
             agg_funcs = list(edges.columns.levels[0])
-            print("Looking up static values for non-reported postsyn. neurons")
-            for _agg_id, agg_func_name in enumerate(agg_funcs):
-                agg = AGG_FUNCS[agg_func_name]
-                _t_codes = edges.columns.codes[1][edges.columns.codes[0] == _agg_id]  # codes 0 is time steps
-                time_stamps = edges.columns.levels[1][_t_codes]
-                M = circuit_connection_matrix(sim.circuit, for_gids=nrn["gid"], for_gids_post=non_report_gids,
-                                              edge_property=report_cfg["static_prop_name"], agg_func=agg).tocoo()
-                stat_edge_props.append(pd.DataFrame.from_dict(dict([(t, M.data) for t in time_stamps])))
-                stat_edge_props[-1].columns.name = "time"
-            stat_edge_props = pd.concat(stat_edge_props, axis=1, copy=False,
-                                        keys=agg_funcs, names=[edges.columns.names[1]])
-                                        
-            edges = edges.append(stat_edge_props[edges.columns])
-            edge_ids = pd.concat([edge_ids, pd.DataFrame.from_dict({"row": M.row, "col": M.col})], axis=0, copy=False)
-            new_idxx = pd.RangeIndex(len(edges))
-            edges = edges.set_index(new_idxx)
-            edge_ids = edge_ids.set_index(new_idxx)
+            time_stamps = edges.columns.levels[1]
+            lo_nr_gids = pd.Series(non_report_gids)
+            Ms = circuit_connection_matrix(sim.circuit, for_gids=nrn["gid"], for_gids_post=non_report_gids,
+                                           edge_property=report_cfg["static_prop_name"], agg_func=agg_funcs)
+            stat_edges = [pd.DataFrame.from_dict({t: Ms[agg_func].tocoo().data for t in time_stamps})
+                          for agg_func in agg_funcs]
+            stat_edges = pd.concat(stat_edges, axis=1, copy=False,  keys=agg_funcs)
+            stat_edges.columns.set_names(edges.columns.names, inplace=True)
+            # map (non-reported, local) col idx to gids and then back to (global) col idx
+            stat_col_idx = lo_gids[lo_nr_gids[Ms[agg_funcs[0]].tocoo().col]].to_numpy()
+            stat_edges.index = pd.MultiIndex.from_arrays(np.array([Ms[agg_funcs[0]].tocoo().row, stat_col_idx]),
+                                                         names=["row", "col"])
+            edges = edges.append(stat_edges)
+            edges.sort_index(inplace=True)
 
-        shape= (len(nrn), len(nrn))
-        # TODO: Compare to expected edges. Find missing (i.e. unreported) edges and fill them in with static values
+        new_idxx = pd.RangeIndex(len(edges))
+        edge_ids = edges.index.to_frame().set_index(new_idxx)
+        edges = edges.set_index(new_idxx)
+        shape = (len(nrn), len(nrn))
         return cls(edge_ids, edge_properties=edges, vertex_properties=nrn.set_index("gid"), shape=shape)
 
 
@@ -689,6 +668,7 @@ class ConnectivityGroup(object):
         self._vertex_properties.to_hdf(fn, key=full_prefix + "/vertex_properties", format="table")
 
         matrix_prefix = full_prefix + "/matrices"
+
         def _store(mat):
             global _MAT_GLOBAL_INDEX
             grp_name = "matrix{0}".format(_MAT_GLOBAL_INDEX)
@@ -702,3 +682,18 @@ class ConnectivityGroup(object):
         with h5py.File(fn, "a") as h5:
             data_grp = h5[full_prefix]
             data_grp.attrs["NEUROTOP_CLASS"] = "ConnectivityGroup"
+
+
+if __name__ == "__main__":
+    import os
+    from bluepy import Simulation
+    from conntility.connectivity import TimeDependentMatrix
+    sim_dir = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations/LayerWiseEShotNoise_PyramidPatterns/"
+    sim = Simulation(os.path.join(sim_dir, "BlueConfig"))
+    mapping_fname = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/syn_idx.pkl"
+    report_cfg = {"t_start": 0.0, "t_end": 62000.0, "t_step": 1000.0, "report_name": "rho",
+                  "static_prop_name": "rho0_GB"}
+    load_cfg = {"loading": {"properties": ["x", "y", "z", "mtype", "synapse_class"], "base_target": "hex_O1"},
+                "filtering": [{"column": "synapse_class", "value": "EXC"}]}
+    T = TimeDependentMatrix.from_report(sim, report_cfg, load_cfg, mapping_fname)
+    T.to_h5(os.path.join(sim_dir, "td_edges_%s.h5" % report_cfg["report_name"]))
