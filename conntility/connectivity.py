@@ -683,17 +683,4 @@ class ConnectivityGroup(object):
             data_grp = h5[full_prefix]
             data_grp.attrs["NEUROTOP_CLASS"] = "ConnectivityGroup"
 
-
-if __name__ == "__main__":
-    import os
-    from bluepy import Simulation
-    from conntility.connectivity import TimeDependentMatrix
-    sim_dir = "/gpfs/bbp.cscs.ch/project/proj96/scratch/home/ecker/simulations/LayerWiseEShotNoise_PyramidPatterns/"
-    sim = Simulation(os.path.join(sim_dir, "BlueConfig"))
-    mapping_fname = "/gpfs/bbp.cscs.ch/project/proj96/circuits/plastic_v1/syn_idx.pkl"
-    report_cfg = {"t_start": 0.0, "t_end": 62000.0, "t_step": 1000.0, "report_name": "rho",
-                  "static_prop_name": "rho0_GB"}
-    load_cfg = {"loading": {"properties": ["x", "y", "z", "mtype", "synapse_class"], "base_target": "hex_O1"},
-                "filtering": [{"column": "synapse_class", "value": "EXC"}]}
-    T = TimeDependentMatrix.from_report(sim, report_cfg, load_cfg, mapping_fname)
-    T.to_h5(os.path.join(sim_dir, "td_edges_%s.h5" % report_cfg["report_name"]))
+            
