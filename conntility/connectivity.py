@@ -156,7 +156,7 @@ class _MatrixEdgeIndexer(object):
 
 
 class ConnectivityMatrix(object):
-    """Small utility class to hold a connections matrix and generate submatrices"""
+    """Class to get, save, load and hold a connections matrix and generate submatrices from it"""
     def __init__(self, *args, vertex_labels=None, vertex_properties=None,
                  edge_properties=None, default_edge_property="data", shape=None):
         """Not too intuitive init - please see `from_bluepy()` below"""
@@ -493,8 +493,10 @@ def _update_load_config(load_cfg, sim_tgt):
 
 
 class TimeDependentMatrix(ConnectivityMatrix):
+    """Utility class to get, save, load and hold a time dependent weighted connections matrices"""
     def __init__(self, *args, vertex_labels=None, vertex_properties=None,
                  edge_properties=None, default_edge_property=None, shape=None):
+        """Not too intuitive init - please see `from_report()` below"""
         if len(args) == 1 and isinstance(args[0], np.ndarray) or isinstance(args[0], sparse.spmatrix):
             raise ValueError("TimeDependentMatrix can only be initialized by edge indices and edge properties")
         if isinstance(edge_properties, dict):
@@ -545,6 +547,20 @@ class TimeDependentMatrix(ConnectivityMatrix):
     
     @classmethod
     def from_report(cls, sim, report_cfg, load_cfg=None, presyn_mapping=None):
+        """
+        A sonata synapse (compartment) report based constructor
+        :param sim: bluepy Simulation object
+        :param report_cfg: config dict with report's name, time steps to load,
+                           static property name to look up for synapses that aren't reported,
+                           and optionally the names of the aggregation functions to use
+        :param load_cfg: config dict for loading and filtering neurons from the circuit
+        :param presyn_mapping: mapping used to convert report from Neurodamus' post_gid & local_syn_id to
+                               pre_gid and post_gid which can then be grouped and aggregated to get weighted connectomes
+                               can be: pd.DataFrame with pre & post_gids and Neurodamus' local_syn_idx or
+                                       filename of a saved DataFrame like that (loaded with `pd.read_pickle()`) or
+                                       None (default) in which case the mapping will be calculated on the fly
+        :return: a TimeDependentMatrix object
+        """
         from .io.synapse_report import sonata_report, load_report, get_presyn_mapping, reindex_report, aggregate_data
         from .circuit_models.neuron_groups.grouping_config import load_filter
 
@@ -683,4 +699,3 @@ class ConnectivityGroup(object):
             data_grp = h5[full_prefix]
             data_grp.attrs["NEUROTOP_CLASS"] = "ConnectivityGroup"
 
-            
