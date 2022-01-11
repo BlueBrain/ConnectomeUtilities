@@ -204,3 +204,10 @@ def for_undirected_connectivity():
             matrix = matrix.astype(bool)
             ud_matrix = (matrix + matrix.transpose())
             return analysis_function(ud_matrix, nrn_df, *args, **kwargs)
+
+
+def for_binarized_connectivity():
+    def decorator(analysis_function):
+        def out_function(matrix, nrn_df, *args, **kwargs):
+            matrix = matrix.astype(bool)
+            return analysis_function(matrix, nrn_df, *args, **kwargs)
