@@ -196,6 +196,8 @@ def for_bidirectional_connectivity():
             matrix = matrix.astype(bool)
             bd_matrix = (matrix.astype(int) + matrix.transpose()) == 2
             return analysis_function(bd_matrix, nrn_df, *args, **kwargs)
+        return out_function
+    return decorator
 
 
 def for_undirected_connectivity():
@@ -204,6 +206,8 @@ def for_undirected_connectivity():
             matrix = matrix.astype(bool)
             ud_matrix = (matrix + matrix.transpose())
             return analysis_function(ud_matrix, nrn_df, *args, **kwargs)
+        return out_function
+    return decorator
 
 
 def for_binarized_connectivity():
@@ -211,3 +215,5 @@ def for_binarized_connectivity():
         def out_function(matrix, nrn_df, *args, **kwargs):
             matrix = matrix.astype(bool)
             return analysis_function(matrix, nrn_df, *args, **kwargs)
+        return out_function
+    return decorator
