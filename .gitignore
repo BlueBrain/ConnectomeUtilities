@@ -5,3 +5,4 @@ build/**/*.py
 cov.xml
 .coverage
 synapse_report_reader_test.py
+topology_analysis.log
