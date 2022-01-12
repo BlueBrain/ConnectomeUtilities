@@ -13,14 +13,11 @@ STR_VOID = "VOID"
 
 def find_sonata_connectome(circ, connectome, return_sonata_file=True):
     """
-    Returns the sonata connectome associated with a named projection; or the default 
-    "local" connecome.
+    Returns the sonata connectome associated with a named projection; or the default "local" connectome.
     Input:
     circ (bluepy.Circuit)
-    connectome (str): Name of the projection to look up. Use "local" for the default local
-    (i.e. touch-based) connectome.
-    return_sonata_file (optional, default: True): If true, returns the path of the .sonata
-    file. Else returns a bluepy.Connectome.
+    connectome (str): Name of the projection to look up. Use "local" for the default local (i.e. touch-based) connectome
+    return_sonata_file (optional): If true, returns the path of the .h5 file. Else returns a bluepy.Connectome.
     """
     if return_sonata_file:
         if connectome == LOCAL_CONNECTOME:
@@ -31,21 +28,21 @@ def find_sonata_connectome(circ, connectome, return_sonata_file=True):
     return circ.projection[connectome]
 
 
-def full_connection_matrix(sonata_fn, n_neurons=None, chunk=50000000):
+def full_connection_matrix(sonata_fn, n_neurons=None, population="default", chunk=50000000):
     """
     Returns the full connection matrix encoded in a sonata h5 file.
     Input:
     sonata_fn (str): Path to the sonata h5 file.
-    n_neurons (optional): Number of neurons in the connectome. If not provided,
-    it will be estimated from the connectivity info, but unconnected neurons may
-    get ignored!
+    n_neurons (optional): Number of neurons in the connectome. If not provided, it will be estimated
+                          from the connectivity info, but unconnected neurons may get ignored!
+    population (str): Sonata population to work with.
     chunk (optional): Number of connections to read at the same time. Larger values
     will run generally faster, but with fewer updates of the progress bar.
 
     Returns:
     scipy.sparse matrix of connectivity
     """
-    h5 = h5py.File(sonata_fn, "r")['edges/default']
+    h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
     if n_neurons is not None:
         n_neurons = (n_neurons, n_neurons)
 
@@ -60,26 +57,27 @@ def full_connection_matrix(sonata_fn, n_neurons=None, chunk=50000000):
     return M.tocsr()
 
 
-def _connection_property_for_gids(sonata_fn, gids, edge_property, agg_func, gids_post=None):
+def _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_property, agg_func):
     """
     Returns the connection matrix encoded in a sonata h5 file for a subset of neurons.
     Input:
     sonata_fn (str): Path to the sonata h5 file.
     gids: List of neuron gids to get the connectivity for.
+    gids_post (optional): If given, then connectivity FROM gids TO gids_post will be returned. Else: FROM gids TO gids.
+    population (str): Sonata population to work with.
     edge_property (str): Name of the synapse property to report as the value of a connection
-    agg_func (callable): A function to aggregate multiple synapse properties into a single, scalar
-    connection property
-    gids_post (optional): If given, then connectivity FROM gids TO gids_post will be
-    returned. Else: FROM gids TO gids.
+    agg_func: if a callable: A function to aggregate multiple synapse properties into a single,
+                             scalar connection property (has to work with pandas' `.apply()`)
+              if a list: A list of the above described aggregation functions (has to work with pandas' `.agg()`)
 
     Returns:
-    scipy.sparse matrix of connectivity
+    scipy.sparse matrix of connectivity (or a dict of those if a list is passed as `agg_func`)
     """
+    h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
+
     idx = numpy.array(gids) - 1  # From gids to sonata "node" indices (base 0 instead of base 1)
-    h5 = h5py.File(sonata_fn, "r")['edges/default']  # TODO: Instead of hard coding "default" that could be a config parameter
     if gids_post is None:
         gids_post = gids
-
     idx_post = numpy.array(gids_post) - 1
     rv_index = pandas.Series(range(len(idx)), index=idx)
     N = len(gids)
@@ -87,52 +85,79 @@ def _connection_property_for_gids(sonata_fn, gids, edge_property, agg_func, gids
 
     indices = []
     indptr = [0]
-    data = []
-    for id_post in tqdm.tqdm(idx_post):
-        ids_pre = []
-        data_pre = []
-        ranges = h5['indices']['target_to_source']['node_id_to_ranges'][id_post, :]
-        for block in h5['indices']['target_to_source']['range_to_edge_id'][ranges[0]:ranges[1], :]:
-            ids_pre.append(h5['source_node_id'][block[0]:block[1]])
-            data_pre.append(h5['0'][edge_property][block[0]:block[1]])
-            
-        if len(ids_pre) > 0:
-            ids_pre = numpy.hstack(ids_pre)
-            row_ids = rv_index[rv_index.index.intersection(ids_pre)].values
-            indices.extend(row_ids)
-            data_pre = pandas.Series(numpy.hstack(data_pre), index=ids_pre)
-            data_pre = data_pre[data_pre.index.intersection(idx)]
-            data.extend(data_pre.groupby(level=0).apply(agg_func).values)
+    if not isinstance(agg_func, list):
+        data = []
+        for id_post in tqdm.tqdm(idx_post):
+            ids_pre = []
+            data_pre = []
+            ranges = h5['indices']['target_to_source']['node_id_to_ranges'][id_post, :]
+            for block in h5['indices']['target_to_source']['range_to_edge_id'][ranges[0]:ranges[1], :]:
+                ids_pre.append(h5['source_node_id'][block[0]:block[1]])
+                data_pre.append(h5['0'][edge_property][block[0]:block[1]])
 
-        indptr.append(len(indices))
-    mat = sparse.csc_matrix((data, indices, indptr), shape=(N, M))
-    return mat
+            if len(ids_pre) > 0:
+                ids_pre = numpy.hstack(ids_pre)
+                row_ids = rv_index[rv_index.index.intersection(ids_pre)].values
+                indices.extend(row_ids)
+                data_pre = pandas.Series(numpy.hstack(data_pre), index=ids_pre)
+                data_pre = data_pre[data_pre.index.intersection(idx)]
+                data.extend(data_pre.groupby(level=0).apply(agg_func).values)
+
+            indptr.append(len(indices))
+        mat = sparse.csc_matrix((data, indices, indptr), shape=(N, M))
+        return mat
+    else:
+        data = {agg_f: [] for agg_f in agg_func}
+        for id_post in tqdm.tqdm(idx_post):
+            ids_pre = []
+            data_pre = []
+            ranges = h5['indices']['target_to_source']['node_id_to_ranges'][id_post, :]
+            for block in h5['indices']['target_to_source']['range_to_edge_id'][ranges[0]:ranges[1], :]:
+                ids_pre.append(h5['source_node_id'][block[0]:block[1]])
+                data_pre.append(h5['0'][edge_property][block[0]:block[1]])
+
+            if len(ids_pre) > 0:
+                ids_pre = numpy.hstack(ids_pre)
+                row_ids = rv_index[rv_index.index.intersection(ids_pre)].values
+                indices.extend(row_ids)
+                data_pre = pandas.Series(numpy.hstack(data_pre), index=ids_pre)
+                data_pre = data_pre[data_pre.index.intersection(idx)]
+                res = data_pre.groupby(level=0).agg(agg_func)  # here is the main difference from the above one
+                for agg_f in agg_func:
+                    data[agg_f].extend(res[agg_f].to_numpy())
+
+            indptr.append(len(indices))
+        mats = {agg_f: sparse.csc_matrix((data[agg_f], indices, indptr), shape=(N, M)) for agg_f in agg_func}
+        return mats
 
 
-def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, edge_property=None, agg_func=None):
+def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, population="default",
+                               edge_property=None, agg_func=None):
     """
     Returns the connection matrix encoded in a sonata h5 file for a subset of neurons.
     Input:
     sonata_fn (str): Path to the sonata h5 file.
     gids: List of neuron gids to get the connectivity for.
-    gids_post (optional): If given, then connectivity FROM gids TO gids_post will be
-    returned. Else: FROM gids TO gids.
+    gids_post (optional): If given, then connectivity FROM gids TO gids_post will be returned. Else: FROM gids TO gids.
+    population (str): Sonata population to work with.
     edge_property (optional, str): Name of the synapse property to report as the value of a connection
-    If not provided, "True" will be reported for all connections. If provided, _must_ also provide
-    agg_func.
-    agg_func (callable): A function to aggregate multiple synapse properties into a single, scalar
-    connection property
+                                   If not provided, "True" will be reported for all connections.
+                                   If provided, _must_ also provide `agg_func`.
+    agg_func: if a callable: A function to aggregate multiple synapse properties into a single,
+                             scalar connection property (has to work with pandas' `.apply()`)
+              if a list: A list of the above described aggregation functions (has to work with pandas' `.agg()`)
 
     Returns:
-    scipy.sparse matrix of connectivity
+    scipy.sparse matrix of connectivity (or a dict of those if a list is passed as `agg_func`)
     """
+    h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
+
     idx = numpy.array(gids) - 1  # From gids to sonata "node" indices (base 0 instead of base 1)
-    h5 = h5py.File(sonata_fn, "r")['edges/default']  # TODO: Instead of hard coding "default" that could be a config parameter
     if gids_post is None:
         gids_post = gids
     if edge_property is not None:
         assert agg_func is not None, "When looking up connection properties, must provide an agg_func, such as mean"
-        return _connection_property_for_gids(sonata_fn, gids, edge_property, agg_func, gids_post=gids_post)
+        return _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_property, agg_func)
 
     idx_post = numpy.array(gids_post) - 1
     rv_index = pandas.Series(range(len(idx)), index=idx)
@@ -155,40 +180,42 @@ def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, edge_property=No
 
 
 def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, for_gids_post=None,
-                              edge_property=None, agg_func=None, chunk=50000000):
+                              population="default", edge_property=None, agg_func=None, chunk=50000000):
     """
     Returns a structural connection matrix, either for an entire circuit, or a subset of neurons.
     For either local connectivity or any projection. 
     Input:
     circ (bluepy.Circuit)
-    connectome (str, default: "local"): Which connectome to return. Can be either "local", returning the 
-    touch connectome or the name of any projection defined in the CircuitConfig.
+    connectome (str): Which connectome to return. Can be either "local", returning the
+                      touch connectome or the name of any projection defined in the CircuitConfig.
     for_gids: List of neuron gids to get the connectivity for.
-    for_gids_post (optional): If given, then connectivity FROM for_gids TO for_gids_post will be
-    returned. Else: FROM for_gids TO for_gids.
-    NOTE: for_gids_post will be ignored if for_gids is not provided!
-    NOTE: Can be used to get the matrix of external innervation!
-    For that purpose, provide the gids of innervating fibers as for_gids, the gids of circuit neurons as
-    for_gids_post and the name or the projection as connectome.
+    for_gids_post (optional): If given, then connectivity FROM for_gids TO for_gids_post will be returned.
+                              Else: FROM for_gids TO for_gids.
+                              NOTE: for_gids_post will be ignored if for_gids is not provided!
+                              NOTE: Can be used to get the matrix of external innervation!
+                              For that purpose, provide the gids of innervating fibers as for_gids,
+                              the gids of circuit neurons as for_gids_post and the name or the projection as connectome.
+    population (str): Sonata population to work with.
     edge_property (optional, str): Name of the synapse property to report as the value of a connection
-    If not provided, "True" will be reported for all connections. If provided, _must_ also provide
-    agg_func.
-    agg_func (callable): A function to aggregate multiple synapse properties into a single, scalar
-    connection property
-    chunk (optional): Number of connections to read at the same time. Larger values
-    will run generally faster, but with fewer updates of the progress bar.
+                                   If not provided, "True" will be reported for all connections.
+                                   If provided, _must_ also provide `agg_func`.
+    agg_func: if a callable: A function to aggregate multiple synapse properties into a single,
+                             scalar connection property (has to work with pandas' `.apply()`)
+              if a list: A list of the above described aggregation functions (has to work with pandas' `.agg()`)
+    chunk (optional): Number of connections to read at the same time. Larger values will run generally faster,
+                      but with fewer updates of the progress bar.
 
     Returns:
-    scipy.sparse matrix of connectivity
+    scipy.sparse matrix of connectivity (or a dict of those if a list is passed as `agg_func`)
     """
     conn_file = find_sonata_connectome(circ, connectome)
     N = circ.cells.count()
     if for_gids is None:
         if edge_property is not None:
-            raise NotImplementedError("""Connection property reporting not enabled for full circuit matrices.
-            Try calling with for_gids=circ.cells.ids()""")
-        return full_connection_matrix(conn_file, n_neurons=N, chunk=chunk)
-    return connection_matrix_for_gids(conn_file, for_gids, gids_post=for_gids_post,
+            raise NotImplementedError("Connection property reporting not enabled for full circuit matrices."
+                                      "Try calling with for_gids=circ.cells.ids()")
+        return full_connection_matrix(conn_file, n_neurons=N, population=population, chunk=chunk)
+    return connection_matrix_for_gids(conn_file, for_gids, gids_post=for_gids_post, population=population,
                                       edge_property=edge_property, agg_func=agg_func)
 
 
