@@ -28,7 +28,8 @@ def find_sonata_connectome(circ, connectome, return_sonata_file=True):
     return circ.projection[connectome]
 
 
-def full_connection_matrix(sonata_fn, n_neurons=None, population="default", chunk=50000000):
+def full_connection_matrix(sonata_fn, n_neurons=None, population="default",
+                           edge_property=None, agg_func=None, chunk=50000000):
     """
     Returns the full connection matrix encoded in a sonata h5 file.
     Input:
@@ -36,12 +37,20 @@ def full_connection_matrix(sonata_fn, n_neurons=None, population="default", chun
     n_neurons (optional): Number of neurons in the connectome. If not provided, it will be estimated
                           from the connectivity info, but unconnected neurons may get ignored!
     population (str): Sonata population to work with.
+    edge_property (str, optional): Name of a synapse property to look up. Must exist in the connectome.
+    If not provided, a boolean matrix is returned
+    agg_func (list, optional): Name of aggregation function to apply to the property of synapses belonging to the same connection.
+    Must be provided if edge_property is provided!
     chunk (optional): Number of connections to read at the same time. Larger values
     will run generally faster, but with fewer updates of the progress bar.
 
     Returns:
     scipy.sparse matrix of connectivity
     """
+    if edge_property is not None:
+        assert agg_func is not None, "Must also provide a list of functions to aggregate synapses belonging to the same connection!"
+        return _full_connection_property(sonata_fn, edge_property, agg_func, n_neurons=n_neurons,
+                                         population=population, chunk=chunk)
     h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
     if n_neurons is not None:
         n_neurons = (n_neurons, n_neurons)
@@ -55,6 +64,53 @@ def full_connection_matrix(sonata_fn, n_neurons=None, population="default", chun
         B[splt_fr:splt_to] = h5['target_node_id'][splt_fr:splt_to]
     M = sparse.coo_matrix((numpy.ones_like(A, dtype=bool), (A, B)), shape=n_neurons)
     return M.tocsr()
+
+
+def _full_connection_property(sonata_fn, edge_property, agg_func, n_neurons=None, population="default", chunk=50000000):
+    """
+    Returns the full connection matrix encoded in a sonata h5 file. Instead of just a binary matrix, it looks up
+    and assigns structural properties to the connections
+    Input:
+    sonata_fn (str): Path to the sonata h5 file.
+    edge_property (str): Name of the property to look up. Must exist in the connectome
+    agg_func (list): Name of aggregation function to apply to the property of synapses belonging to the same connection
+    n_neurons (optional): Number of neurons in the connectome. If not provided, it will be estimated
+                          from the connectivity info, but unconnected neurons may get ignored!
+    population (str): Sonata population to work with.
+    chunk (optional): Number of connections to read at the same time. Larger values
+    will run generally faster, but with fewer updates of the progress bar.
+
+    Returns:
+    scipy.sparse matrix of connectivity
+    """
+    if not isinstance(agg_func, list):
+        raise NotImplementedError("Currently only implemented for list-of-functions")
+    h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
+    if n_neurons is not None:
+        n_neurons = (n_neurons, n_neurons)
+
+    dset_sz = h5['source_node_id'].shape[0]
+    row_indices = []
+    col_indices = []
+    out_data = dict([(afunc, []) for afunc in agg_func])
+
+    splits = numpy.arange(0, dset_sz + chunk, chunk)
+    for splt_fr, splt_to in tqdm.tqdm(zip(splits[:-1], splits[1:]), total=len(splits) - 1):
+        A = h5['source_node_id'][splt_fr:splt_to]
+        B = h5['target_node_id'][splt_fr:splt_to]
+        data = h5['0'][edge_property][splt_fr:splt_to]
+        S = pandas.Series(data, index=pandas.MultiIndex.from_arrays([A, B])).groupby(level=[0, 1]).agg(agg_func)
+        Si = S.index.to_frame()
+        row_indices.extend(Si[0].values); col_indices.extend(Si[1].values)
+        for afunc in agg_func:
+            out_data[afunc].extend(S[afunc].values)
+
+    M = dict([
+        (afunc,
+         sparse.coo_matrix((out_data[afunc], (row_indices, col_indices)), shape=n_neurons).tocsr())
+         for afunc in agg_func
+    ])
+    return M
 
 
 def _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_property, agg_func):
@@ -211,10 +267,8 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
     conn_file = find_sonata_connectome(circ, connectome)
     N = circ.cells.count()
     if for_gids is None:
-        if edge_property is not None:
-            raise NotImplementedError("Connection property reporting not enabled for full circuit matrices."
-                                      "Try calling with for_gids=circ.cells.ids()")
-        return full_connection_matrix(conn_file, n_neurons=N, population=population, chunk=chunk)
+        return full_connection_matrix(conn_file, edge_property=edge_property, agg_func=agg_func, n_neurons=N,
+                                      population=population, chunk=chunk)
     return connection_matrix_for_gids(conn_file, for_gids, gids_post=for_gids_post, population=population,
                                       edge_property=edge_property, agg_func=agg_func)
 

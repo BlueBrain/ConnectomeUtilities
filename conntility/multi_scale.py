@@ -2,11 +2,15 @@ import numpy
 import pandas
 
 from scipy import sparse
+from scipy.spatial import KDTree
 
 from .circuit_models.neuron_groups import group_by_grid
 from .circuit_models.neuron_groups import load_filter
 from .circuit_models.neuron_groups.defaults import GID
-from .circuit_models import circuit_connection_matrix
+from .circuit_models import circuit_connection_matrix, full_connection_matrix
+
+
+COLS_NAN = ["ss_flat_x", "ss_flat_y"]
 
 
 def multi_scale_grouping(nrn, radii, properties=["ss_flat_x", "ss_flat_y"]):
@@ -92,17 +96,32 @@ class MultiScaleConnectome(object):
         if self.isleaf():
             return self._children
         return pandas.concat([x.nrn() for x in self._children])
+    
+    @staticmethod
+    def __nearest_neighbor_interpolation_for_nans__(nrn, cols_use=["x", "y", "z"],
+                                                    add_noise=1.0):
+        iv = numpy.any(numpy.isnan(nrn[COLS_NAN]), axis=1)
+        K = KDTree(nrn[~iv][cols_use])
+        D, idx = K.query(nrn[iv][cols_use])
+        print("Interpolation of NaN locations: {0} neurons; distance: {1}, {2}, {3} (min/mean/max)".format(len(D), D.min(), D.mean(), D.max()))
+        nrn.loc[iv, COLS_NAN] = nrn.loc[~iv, COLS_NAN].iloc[idx].values + numpy.random.rand(len(idx), len(COLS_NAN)) * add_noise - add_noise / 2
+        return nrn
 
     @classmethod
-    def from_circuit(cls, circ, load_cfg_or_df, leafsize=100):
+    def from_circuit(cls, circ, load_cfg_or_df, leafsize=100, nan_policy="interpolate"):
         if isinstance(load_cfg_or_df, dict):
             nrn = load_filter(circ, load_cfg_or_df)
-            nrn = nrn.loc[~numpy.isnan(nrn["ss_flat_x"])]
         else:
             nrn = load_cfg_or_df
+        if nan_policy == "interpolate":
+            nrn = cls.__nearest_neighbor_interpolation_for_nans__(nrn)
+        elif nan_policy == "drop":
+            nrn = nrn.loc[~numpy.any(numpy.isnan(nrn[COLS_NAN]), axis=1)]
+        elif numpy.any(numpy.isnan(nrn[COLS_NAN])):
+            raise ValueError("Unknown nan_policy: {0}".format(nan_policy))
+
         nrn = nrn.sort_values("gid")
 
-        from scipy.spatial import KDTree
         data = nrn[["ss_flat_x", "ss_flat_y"]]
         bbox = list(zip(data.min(), data.max()))
         T = KDTree(nrn[["ss_flat_x", "ss_flat_y"]], leafsize=leafsize)
@@ -131,7 +150,7 @@ class MultiScaleConnectome(object):
     
     def __attach_matrices__(self, M, tgt_range=10):
         n_node = numpy.mean(self.evaluate_at_depth(lambda x: x.count(), 0))
-        r_node = int(numpy.ceil(numpy.log2(n_node)))
+        r_node = int(numpy.floor(numpy.log2(n_node)))
 
         idx = self.idx
         nrn_df = self._props["neurons"][["ss_flat_x", "ss_flat_y"]]
@@ -193,14 +212,24 @@ class MultiScaleConnectome(object):
             return [self]
         return self._children
 
-    def attach_matrices(self, matrix_kwargs={}, tgt_range=10):
+    def attach_matrices(self, matrix_kwargs={}, tgt_range=10, force_full_matrix=False):
         circ = self._props["circuit"]
         gids = self._props["neurons"][GID]
+        if force_full_matrix:
+            assert len(gids) == circ.cells.count()
+
         if not isinstance(matrix_kwargs, list):
             matrix_kwargs = [matrix_kwargs]
         M = sparse.csc_matrix((len(gids), len(gids)), dtype=float)
         for m_kw in matrix_kwargs:
-            M = M + circuit_connection_matrix(circ, for_gids=gids, **m_kw)
+            if force_full_matrix:
+                Madd = circuit_connection_matrix(circ, **m_kw)
+            else:
+                Madd = circuit_connection_matrix(circ, for_gids=gids, **m_kw)
+            if isinstance(Madd, dict):
+                assert len(Madd) == 1
+                Madd = list(Madd.values())[0]
+            M = M + Madd
         self.__attach_matrices__(M, tgt_range=tgt_range)
         self.__remove_unattached_nodes__()
     
@@ -229,4 +258,4 @@ class MultiScaleConnectome(object):
                 return node_index
             __recursive__(self, 0)
             root_grp_name = grp_pattern.format(0)
-        self._props["neurons"].to_hdf(fn, key=group + "/" + root_grp_name + "/neurons")
+        self._props["neurons"].to_hdf(fn, key=group + "/" + root_grp_name + "/neurons", format="table")
