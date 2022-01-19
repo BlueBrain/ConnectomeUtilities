@@ -391,8 +391,8 @@ class ConnectivityMatrix(object):
 
     def subpopulation(self, subpop_ids):
         """A ConnectivityMatrix object representing the specified subpopulation"""
-        assert np.all(np.in1d(subpop_ids, self._vertex_properties.index.values))
         subpop_ids = self.__extract_vertex_ids__(subpop_ids)
+        assert np.all(np.in1d(subpop_ids, self._vertex_properties.index.values))
         subpop_idx = self._lookup[subpop_ids]
         # TODO: This would be more efficient if the underlying representation was csc.
         # TODO: This fails if there are duplicate entries with the same row/col.
@@ -611,6 +611,18 @@ class TimeDependentMatrix(ConnectivityMatrix):
         edges = edges.set_index(new_idxx)
         shape = (len(nrn), len(nrn))
         return cls(edge_ids, edge_properties=edges, vertex_properties=nrn.set_index("gid"), shape=shape)
+
+
+class ConnectivityInSubgroups(ConnectivityMatrix):
+
+    def __extract_vertex_ids__(self, an_obj):
+        if isinstance(an_obj, str):
+            assert self._vertex_properties[an_obj].dtype == bool, "Population spec must be a column of type bool"
+            return self.gids[self._vertex_properties[an_obj]]
+
+        if hasattr(an_obj, GID):
+            return getattr(an_obj, GID)
+        return an_obj
 
 
 class ConnectivityGroup(object):
