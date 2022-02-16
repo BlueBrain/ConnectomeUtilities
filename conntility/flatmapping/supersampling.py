@@ -106,8 +106,10 @@ def estimate_flatmap_pixel_size(fm, orient):
 def supersample_flatmap(fm, orient, pixel_sz=34.0, include_depth=False):
     import voxcell
     to_system = "subpixel"
+    shape = fm.raw.shape[:3] + (2,)
     if include_depth:
         to_system = "subpixel_depth"
+        shape = fm.raw.shape[:3] + (3,)
     vxl_frame = voxel_flat_coordinate_frame(fm, grouped=True)
     vxl_index_frame = voxel_flat_coordinate_frame(fm, in_voxel_indices=True, grouped=True)
     tf = per_pixel_coordinate_transformation(fm, orient, to_system=to_system)
@@ -122,7 +124,7 @@ def supersample_flatmap(fm, orient, pixel_sz=34.0, include_depth=False):
     if include_depth:
         final_loc_arr[:, 1] = final_loc_arr[:, 1] * -1
     vxl_loc = numpy.vstack(vxl_index_frame.values)
-    out_raw = -numpy.ones_like(fm.raw, dtype=float)
+    out_raw = -numpy.ones(shape, dtype=float)
     out_raw[vxl_loc[:, 0], vxl_loc[:, 1], vxl_loc[:, 2]] = final_loc_arr
     return voxcell.VoxelData(out_raw, fm.voxel_dimensions, offset=fm.offset)
 
