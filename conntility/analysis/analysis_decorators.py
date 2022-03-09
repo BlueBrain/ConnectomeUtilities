@@ -62,12 +62,47 @@ def _grouped_by_grouping_config(grp_cfg, submatrix_func):
                 idxx = idxx.values[:, 0]
                 out_index = pandas.Index(idxx, name=grouped.index.name)
 
+            # TODO: Provide separate neuron dataframes for pre- and post-syn population
             ret = [analysis_function(submatrices[ix], grouped.loc[ix], *args, **kwargs) for ix in idxx]
             if numpy.all([isinstance(_res, pandas.Series) for _res in ret]):
                 ret = pandas.concat(ret, axis=0, keys=out_index, names=out_index.names, copy=False)
             else:
-                ret = pandas.Series([analysis_function(submatrices[ix], grouped.loc[ix], *args, **kwargs)
-                                    for ix in idxx], index=out_index)
+                ret = pandas.Series(ret, index=out_index)
+            return ret
+        return out_function
+    return decorator
+
+
+def pathways_by_grouping_config(grp_cfg):
+    """
+    Perform an analysis separately on submatrices corresponding to all pathways.
+    That is: for a given pair populations A, B it is executed on M[numpy.ix_(A, B)]
+    """
+    def decorator(analysis_function):
+        def out_function(matrix, nrn_df, *args, **kwargs):
+            nrn_df = pandas.concat([nrn_df, pandas.Series(range(len(nrn_df)),
+            index=nrn_df.index, name="__index__")], copy=False, axis=1)
+            grouped = group_with_config(nrn_df, grp_cfg)
+
+            u_idx = grouped.index.to_frame().drop_duplicates()
+            cols_pre = [_x + "_pre" for _x in u_idx.columns]
+            cols_post = [_x + "_post" for _x in u_idx.columns]
+            ret = []
+            out_idx = []
+            for idx_to in u_idx.values:
+                for idx_fr in u_idx.values:
+                    subm = matrix[numpy.ix_(grouped["__index__"][idx_fr], grouped["__index__"][idx_to])]
+                    ret.append(analysis_function(subm, (grouped.loc[idx_fr], grouped.loc[idx_to]), *args, **kwargs))
+                    idx_dict = dict(zip(cols_pre, idx_fr))
+                    idx_dict.update(dict(zip(cols_post, idx_to)))
+                    out_idx.append(idx_dict)
+            
+            out_idx = pandas.MultiIndex.from_frame(pandas.DataFrame.from_records(out_idx))
+
+            if numpy.all([isinstance(_res, pandas.Series) for _res in ret]):
+                ret = pandas.concat(ret, axis=0, keys=out_idx, names=out_idx.names, copy=False)
+            else:
+                ret = pandas.Series(ret, index=out_idx)
             return ret
         return out_function
     return decorator
