@@ -1,7 +1,7 @@
 import numpy
 
 from tqdm import tqdm
-from scipy.sparse._data import _data_matrix
+from scipy.sparse import issparse
 
 from .embed import compute_diffusion_map # part of this repo. originally: https://github.com/satra/mapalign
 
@@ -11,11 +11,10 @@ def similarity_matrix(C):
     individual _rows_ of the input matrix are.
     Additionally returns a normalized version of the similarity that is relevant for the
     diffusion embedding process."""
-    is_sparse = isinstance(C, _data_matrix)
     chunk_size = 100000
     C = C.astype(float)
 
-    if is_sparse:
+    if issparse(C):
         C = C.tocsr()
         normalize_vals = numpy.array(numpy.sqrt(C.multiply(C).sum(axis=1))).flatten()
         for i, v in enumerate(normalize_vals): # Normalize connectivity
