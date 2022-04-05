@@ -1,7 +1,7 @@
 import numpy
 
 from tqdm import tqdm
-from scipy.sparse.data import _data_matrix
+from scipy.sparse._data import _data_matrix
 
 from .embed import compute_diffusion_map # part of this repo. originally: https://github.com/satra/mapalign
 
