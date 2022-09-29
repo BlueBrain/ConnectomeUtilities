@@ -14,7 +14,7 @@ def input_spikes(sim):
     (i.e. the output spikes).
     """
     def read_csv(path):
-        data = pandas.read_csv(path, sep="\t")["/scatter"]
+        data = pandas.read_csv(path, delim_whitespace=True)["/scatter"]
         data.name = "gid"
         data.index.name = "t"
         return data
@@ -73,8 +73,7 @@ def input_innervation_from_matrix(spikes, matrix, gids_pre, t_win=None):
     return innervation
 
 
-def input_innervation(sim, base_target=None, neuron_properties=[],
-                      t_wins=None):
+def input_innervation(sim, base_target=None, neuron_properties=[], t_wins=None):
     """
     How strongly each neuron is innervated by the simulation input spikes
     Input:
