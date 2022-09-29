@@ -3,15 +3,16 @@ Contributed by Vishal Sood
 Modified by Michael W. Reimann
 Last changed: 2021/12/15
 """
+
 import os
 
 from ..plugins import import_module
-
 
 from ..io.logging import get_logger
 from ..circuit_models.neuron_groups.grouping_config import _resolve_includes
 
 LOG = get_logger("Topology Pipeline Analysis", "INFO")
+
 
 def widen_by_index(level, dataframe):
     """Widen a dataframe by an index level."""
@@ -19,6 +20,7 @@ def widen_by_index(level, dataframe):
     groups = dataframe.groupby(level)
     return pd.concat([g.droplevel(level) for _, g in groups], axis=1,
                      keys=[i for i, _ in groups], names=[level])
+
 
 def get_analyses(in_config):
     """..."""
@@ -32,6 +34,7 @@ def get_analyses(in_config):
     analyses = in_config["analyses"]
     return collect_plugins_of_type(SingleMethodAnalysisFromSource,
                                    in_config=analyses, resolve_at=_root)
+
 
 def collect_plugins_of_type(T, in_config, **kwargs):
     """..."""
@@ -191,7 +194,6 @@ class SingleMethodAnalysisFromSource:
             LOG.info("Done %s", log_info)
 
         return result
-
 
     @staticmethod
     def collect(data):
