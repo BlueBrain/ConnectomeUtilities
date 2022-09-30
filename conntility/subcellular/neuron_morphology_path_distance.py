@@ -142,7 +142,8 @@ class MorphologyPathDistanceCalculator(object):
     def path_distances(self, locs_from, locs_to=None,
                        str_section_id="afferent_section_id",
                        str_segment_id="afferent_segment_id",
-                       str_offset="afferent_segment_offset"):
+                       str_offset="afferent_segment_offset",
+                       same_section_only=False):
         """
         Calculate path distances. Either pairwise, or between two sets of points.
         Args:
@@ -153,6 +154,7 @@ class MorphologyPathDistanceCalculator(object):
           str_section_id (default="afferent_section_id"): The name of the column holding the section id.
           str_segment_id (default="afferent_segment_id"): The name of the column holding the segment id.
           str_offset (defaults="afferent_segment_offset"): The name of the column holding the within-segment offset.
+          same_section_only (bool, default=False): If True, set values for all pairs NOT on the same section to NaN.
 
           Note: The default column names are set to what bluepysnap returns when asked for afferent synapses.
           Also, the section id is expected to be base-1 indexed. That is, index 0 is the soma, index 1 is the first "proper" section.
@@ -166,6 +168,18 @@ class MorphologyPathDistanceCalculator(object):
         if locs_to is None:
             locs_to = locs_from
         
+        o_from = self.within_section_offsets(locs_from, str_section_id=str_section_id,
+                                             str_segment_id=str_segment_id, str_offset=str_offset)
+        o_to = self.within_section_offsets(locs_to, str_section_id=str_section_id,
+                                           str_segment_id=str_segment_id, str_offset=str_offset)
+        if same_section_only:
+            same_section = numpy.eye(len(self.m.sections) + 1, dtype=bool)
+            same_section = same_section[numpy.ix_(locs_from[str_section_id], locs_to[str_section_id])]
+            dist = numpy.NaN * numpy.ones(same_section.shape, dtype=float)
+            i, j = numpy.nonzero(same_section)
+            dist[i, j] = numpy.abs(o_from[i] - o_to[j])
+            return dist
+        
         sec_idx_fr = locs_from[str_section_id].copy() - 1
         sec_idx_to = locs_to[str_section_id].copy() - 1
         # Since we test above that the first section is rooted at the soma, we can use that section in place of the soma.
@@ -177,10 +191,6 @@ class MorphologyPathDistanceCalculator(object):
                                 sec_idx_to)].copy()
         rel = self.R[numpy.ix_(sec_idx_fr,
                                 sec_idx_to)]
-        o_from = self.within_section_offsets(locs_from, str_section_id=str_section_id,
-                                             str_segment_id=str_segment_id, str_offset=str_offset)
-        o_to = self.within_section_offsets(locs_to, str_section_id=str_section_id,
-                                           str_segment_id=str_segment_id, str_offset=str_offset)
         
         i, j = numpy.nonzero(rel == 0) # on same section
         dist[i, j] = dist[i, j] + numpy.abs(o_from[i] - o_to[j])
