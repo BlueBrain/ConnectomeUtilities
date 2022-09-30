@@ -182,6 +182,9 @@ class MorphologyPathDistanceCalculator(object):
         o_to = self.within_section_offsets(locs_to, str_section_id=str_section_id,
                                            str_segment_id=str_segment_id, str_offset=str_offset)
         
+        i, j = numpy.nonzero(rel == 0) # on same section
+        dist[i, j] = dist[i, j] + numpy.abs(o_from[i] - o_to[j])
+
         i, j = numpy.nonzero(rel == 1) # locs_to (j) is ancestor
         dist[i, j] = dist[i, j] + o_from[i] - o_to[j]
         
