@@ -659,13 +659,14 @@ class ConnectivityGroup(object):
         return self.__load_if_needed__(self._mats[key])
     
     @classmethod
-    def from_bluepy(cls, bluepy_obj, load_config=None, connectome=LOCAL_CONNECTOME):
+    def from_bluepy(cls, bluepy_obj, load_config=None, connectome=LOCAL_CONNECTOME, **kwargs):
         """
         BlueConfig/CircuitConfig based constructor
         :param bluepy_obj: bluepy Simulation or Circuit object
         :param load_config: config dict for loading and filtering neurons from the circuit
         :param connectome: str. that can be "local" which specifies local circuit connectome
                            or the name of a projection to use
+        Additional **kwargs are forwarded to a call of conntility.circuit_models.circuit_group_matrices
         """
         from .circuit_models.neuron_groups import load_group_filter
         from .circuit_models import circuit_group_matrices
@@ -678,7 +679,7 @@ class ConnectivityGroup(object):
         nrn = load_group_filter(circ, load_config)
 
         # TODO: think a bit about if it should even be possible to call this for a projection (remove arg. if not...)
-        mats = circuit_group_matrices(circ, nrn, connectome=connectome)
+        mats = circuit_group_matrices(circ, nrn, connectome=connectome, **kwargs)
         nrns = [nrn.loc[x].set_index(GID) for x in mats.keys()]
         con_obj = [ConnectivityMatrix(mat, vertex_properties=n) for n, mat in zip(nrns, mats)]
         return cls(pd.Series(con_obj, index=mats.index))
