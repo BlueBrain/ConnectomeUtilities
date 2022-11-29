@@ -155,6 +155,56 @@ class _MatrixEdgeIndexer(object):
         return self._parent.subedges(edge_ids)
 
 
+class _MatrixNeighborhoodIndexer(object):
+
+    def __init__(self, parent):
+        self._parent = parent
+        self._prop = parent._lookup
+    
+    def get_single(self, pre=None, post=None, center_first=True):
+        if pre is None and post is None: raise ValueError("Insufficient number of arguments!")
+
+        indexer = self._parent._edge_indices.reset_index()
+        idxx = set()
+        centers = []
+        if pre is not None:
+            centers.append(self._prop[pre])
+            idxx = idxx.union(indexer.set_index("row")["col"].get(centers[-1:], []))
+        if post is not None:
+            if pre != post:
+                centers.append(self._prop[post])
+            idxx = idxx.union(indexer.set_index("col")["row"].get(centers[-1:], []))
+        if center_first:
+            pop_ids = self._parent._vertex_properties.index[centers + sorted(idxx)]
+        else:
+            idxx = idxx.union(centers)
+            pop_ids = self._parent._vertex_properties.index[sorted(idxx)]
+        return self._parent.subpopulation(pop_ids)
+        
+    def get(self, *args, pre=None, post=None, center_first=True):
+        if len(args) > 1:
+            raise ValueError("Please provide a single vertex identifier or use the kwargs!")
+        if len(args) == 1:
+            arg = args[0]
+            if hasattr(arg, "__iter__"):
+                mats = [self.get_single(pre=_arg, post=_arg, center_first=center_first) for _arg in arg]
+                df = pd.DataFrame({"center": arg})
+                return ConnectivityGroup(df, mats)
+            return self.get_single(pre=arg, post=arg, center_first=center_first)
+        if not hasattr(pre, "__iter__"):
+            if not hasattr(post, "__iter__"):
+                return self.get_single(pre, post, center_first=center_first)
+            pre = [pre for _ in post]
+        if not hasattr(post, "__iter__"): post = [post for _ in pre]
+        assert len(pre) == len(post), "Argument mismatch!"
+        mats = [self.get_single(_pre, _post, center_first=center_first) for _pre, _post in zip(pre, post)]
+        df = pd.DataFrame({"center_pre": pre, "center_post": post})
+        return ConnectivityGroup(df, mats)
+
+    def __getitem__(self, idx):
+        return self.get(idx)
+
+
 class ConnectivityMatrix(object):
     """Class to get, save, load and hold a connections matrix and generate submatrices from it"""
     def __init__(self, *args, vertex_labels=None, vertex_properties=None,
@@ -219,6 +269,7 @@ class ConnectivityMatrix(object):
         # TODO: calling it "gids" might be too BlueBrain-specific! Change name?
         self.gids = self._vertex_properties.index.values
         # TODO: Additional tests, such as no duplicate edges!
+        self.neighborhood = _MatrixNeighborhoodIndexer(self)
 
     def __len__(self):
         return len(self.gids)
