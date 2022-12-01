@@ -590,8 +590,8 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
     
     def delta(self, idx_fr, idx_to):
         mxx = self._off.index.max() + 1
-        is_off = self._off[np.arange(idx_fr + 1, idx_to + 1)].reset_index().groupby("edge")
-        is_on = self._on[np.arange(idx_fr + 1, idx_to + 1)].reset_index().groupby("edge")
+        is_off = self._off.get(np.arange(idx_fr + 1, idx_to + 1), self._off.iloc[:0]).reset_index().groupby("edge")
+        is_on = self._on.get(np.arange(idx_fr + 1, idx_to + 1), self._on.iloc[:0]).reset_index().groupby("edge")
 
         off_mx = is_off.agg("max")
         on_mx = is_on.agg("max")
