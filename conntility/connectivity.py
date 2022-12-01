@@ -456,7 +456,7 @@ class ConnectivityMatrix(object):
         out_vertices = self._vertex_properties.loc[subpop_ids]
         # TODO: This will result in indices of _edge_indices and _edges by different.
         # That is OK, because the indices are never used. But still, might want to revisit...
-        return self.__class__(subindex.row, subindex.col, vertex_properties=out_vertices,
+        return ConnectivityMatrix(subindex.row, subindex.col, vertex_properties=out_vertices,
                                   edge_properties=out_edges, default_edge_property=self._default_edge,
                                   shape=(len(subpop_ids), len(subpop_ids)))
 
@@ -467,7 +467,7 @@ class ConnectivityMatrix(object):
         rowcol = self._edge_indices.iloc[subedge_indices]
         out_edges = self._edges.iloc[subedge_indices]
 
-        return self.__class__(rowcol["row"], rowcol["col"], vertex_properties=self._vertex_properties,
+        return ConnectivityMatrix(rowcol["row"], rowcol["col"], vertex_properties=self._vertex_properties,
         edge_properties=out_edges, default_edge_property=self._default_edge, shape=self._shape)
 
     def random_n_gids(self, ref):
@@ -541,6 +541,160 @@ def _update_load_config(load_cfg, sim_tgt):
     else:  # why is this part necessary?
         load_config["base_target"] = sim_tgt
     return load_config
+
+
+class StructurallyPlasticMatrix(ConnectivityMatrix):
+    def __init__(self, *args, vertex_labels=None, vertex_properties=None,
+                 edge_properties=None, default_edge_property="data", shape=None,
+                 edge_off={}, edge_on={}, check_consistency=True):
+        super().__init__(*args, vertex_labels=vertex_labels, vertex_properties=vertex_properties,
+                         edge_properties=edge_properties, default_edge_property=default_edge_property,
+                         shape=shape)
+        self._off = self._build_on_off_index(edge_off)
+        self._on = self._build_on_off_index(edge_on)
+        if check_consistency:
+            check = self.is_consistent()
+            failure_count = (~check).sum()
+            if failure_count > 0:
+                raise ValueError("On-off data is inconsistent for {0} edges!".format(failure_count))
+    
+    @staticmethod
+    def _build_on_off_index(struc_in):
+        if isinstance(struc_in, dict):
+            t = sorted(struc_in.keys())
+            if len(struc_in) > 0:
+                idx = pd.Index(np.hstack([_t * np.ones_like(struc_in[_t]) for _t in t]), name="t", dtype="int64")
+                vals = np.hstack([struc_in[_t] for _t in t])
+            else:
+                idx = pd.Index([], name="t", dtype="int64")
+                vals = []
+            return pd.Series(vals, index=idx, name="edge", dtype="int64").sort_index()
+        elif isinstance(struc_in, pd.Series):
+            idx = pd.Index(struc_in.index, dtype="int64", name="t")
+            struc_in.index = idx
+            struc_in.name = "edge"
+            return struc_in.sort_index()
+        else:
+            raise ValueError()
+    
+    def __getitem__(self, idx):
+        is_off = self._off.loc[:idx].drop_duplicates(keep="last")
+        is_on = self._on.loc[:idx].drop_duplicates(keep="last")
+        off_mx = is_off.reset_index().groupby("edge").agg("max") # the last time it's switched off
+        on_mx = is_on.reset_index().groupby("edge").agg("max") # the last time its' switched_on
+
+        idxx = pd.Series(0, index=range(len(self._edge_indices)), name="t").to_frame()
+        idxx = idxx.subtract(off_mx.subtract(on_mx, fill_value=-1), fill_value=0) >= 0
+
+        return self.subedges(idxx.index[idxx["t"]].values)
+    
+    def delta(self, idx_fr, idx_to):
+        mxx = self._off.index.max() + 1
+        is_off = self._off[np.arange(idx_fr + 1, idx_to + 1)].reset_index().groupby("edge")
+        is_on = self._on[np.arange(idx_fr + 1, idx_to + 1)].reset_index().groupby("edge")
+
+        off_mx = is_off.agg("max")
+        on_mx = is_on.agg("max")
+        off_mn = is_off.agg("min")
+        on_mn = is_on.agg("min")
+
+        off_first = off_mn.subtract(on_mn, fill_value=mxx) < 0
+        off_last = off_mx.subtract(on_mx, fill_value=-1) > 0
+        delta_sign = -((off_first.astype(int) + off_last) - 1)
+        delta_sign = delta_sign["t"][delta_sign["t"] != 0]
+
+        ret = self.subedges(delta_sign.index)
+        ret.add_edge_property("delta", delta_sign.values)
+        return ret.default("delta", copy=False)
+    
+    def skip(self, step, copy=True):
+        new_off = self._off.drop(step)
+        new_on = self._on.drop(step)
+        if copy:
+            return StructurallyPlasticMatrix(self._edge_indices, vertex_properties=self._vertex_properties,
+                                             edge_properties=self._edges, default_edge_property=self._default_edge,
+                                             shape=self._shape, edge_off=new_off, edge_on=new_on, check_consistency=False)
+        self._off = new_off
+        self._on = new_on
+        return self
+    
+    def count_changes(self, count_off=True, count_on=True):
+        counts = pd.DataFrame({"count": np.zeros(len(self._edge_indices), dtype=int)})
+        if count_off:
+            to_add = self._off.reset_index().groupby("edge").agg(len)
+            counts = counts.add(to_add.rename(columns={"t": "count"}), fill_value=0)
+        if count_on:
+            to_add = self._on.reset_index().groupby("edge").agg(len)
+            counts = counts.add(to_add.rename(columns={"t": "count"}), fill_value=0)
+        counts["data"] = np.ones(len(self._edge_indices), dtype=bool)
+        return ConnectivityMatrix(self._edge_indices, vertex_properties=self._vertex_properties,
+                                  edge_properties=counts, default_edge_property="count")
+    
+    def amount_active(self):
+        mxx = np.maximum(self._off.index.max(), self._on.index.max()) + 1
+        counts = pd.DataFrame({"count": mxx * np.ones(len(self._edge_indices), dtype=int),
+                               "data": np.ones(len(self._edge_indices), dtype=bool)})
+        off_times = self._off.reset_index().groupby("edge").apply(lambda x: np.hstack([x["t"].values, mxx]))
+        on_times = self._on.reset_index().groupby("edge").apply(lambda x: np.hstack([0, x["t"].values]))
+
+        def counter(arg):
+            if not isinstance(arg["ton"], np.ndarray): return arg["toff"][0]
+            ton = arg["ton"]
+            return (arg["toff"][:len(ton)] - ton).sum()
+        check = pd.concat([off_times, on_times], axis=1, keys=["toff", "ton"])
+        check = check.apply(counter, axis=1)
+        counts.loc[check.index, "count"] = check
+        return ConnectivityMatrix(self._edge_indices, vertex_properties=self._vertex_properties,
+                                  edge_properties=counts, default_edge_property="count")
+    
+    def is_consistent(self):
+        from scipy.spatial import distance
+        def simple_diff(a, b):
+            return (b - a)[0]
+
+        def valid(arg):
+            if not isinstance(arg["toff"], np.ndarray): return False
+            if not isinstance(arg["ton"], np.ndarray): return len(arg["toff"]) == 1
+            mat = distance.cdist(arg["ton"], arg["toff"], metric=simple_diff)
+            return ~np.any(mat == 0) and\
+                np.all(np.triu(mat, 1) >= 0) and\
+                np.all(np.tril(mat) <= 0)
+        
+        off_times = self._off.reset_index().groupby("edge").apply(lambda x: np.vstack(x["t"]))
+        on_times = self._on.reset_index().groupby("edge").apply(lambda x: np.vstack(x["t"]))
+        check = pd.concat([off_times, on_times], axis=1, keys=["toff", "ton"])
+        check = check.apply(valid, axis=1)
+        return check
+    
+    @classmethod
+    def from_matrix_stack(cls, mats, vertex_labels=None, vertex_properties=None,
+                          default_edge_property="data"):
+        assert len(mats) > 0
+        ms = [sparse.coo_matrix(_m) for _m in mats]
+        assert np.all([_m.shape == ms[0].shape for _m in ms])
+        shape = ms[0].shape
+        
+        def mat2df(mat):
+            return pd.DataFrame({
+                "row": mat.row, "col": mat.col
+            })
+        dfs = list(map(mat2df, ms))
+
+        df = pd.concat(dfs, axis=0).drop_duplicates().reset_index(drop=True)
+        curr_idx = pd.MultiIndex.from_frame(df)
+
+        off_dict = {}; on_dict = {}; tent_off = []
+        for t in range(len(dfs)):
+            new_idx = pd.MultiIndex.from_frame(dfs[t])
+            tent_on = tent_off
+            tent_off = np.nonzero([_idx not in new_idx for _idx in curr_idx])[0]
+            on_dict[t] = np.setdiff1d(tent_on, tent_off)
+            off_dict[t] = np.setdiff1d(tent_off, tent_on)
+        
+        edge_properties = pd.DataFrame({default_edge_property: np.ones(len(df), dtype=bool)})
+        return cls(df, vertex_labels=vertex_labels, vertex_properties=vertex_properties,
+                   edge_properties=edge_properties, default_edge_property=default_edge_property,
+                   shape=shape, edge_off=off_dict, edge_on=on_dict)
 
 
 class TimeDependentMatrix(ConnectivityMatrix):
