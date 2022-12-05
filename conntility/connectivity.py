@@ -613,10 +613,11 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
         if copy:
             return StructurallyPlasticMatrix(self._edge_indices, vertex_properties=self._vertex_properties,
                                              edge_properties=self._edges, default_edge_property=self._default_edge,
-                                             shape=self._shape, edge_off=new_off, edge_on=new_on, check_consistency=False)
+                                             shape=self._shape, edge_off=new_off, edge_on=new_on,
+                                             check_consistency=False).fix_consistency(copy=False)
         self._off = new_off
         self._on = new_on
-        return self
+        return self.fix_consistency(copy=False)
     
     def count_changes(self, count_off=True, count_on=True):
         counts = pd.DataFrame({"count": np.zeros(len(self._edge_indices), dtype=int)})
@@ -665,6 +666,31 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
         check = pd.concat([off_times, on_times], axis=1, keys=["toff", "ton"])
         check = check.apply(valid, axis=1)
         return check
+
+    def fix_consistency(self, copy=False):
+        is_on = set(range(len(self._edge_indices)))
+        valid_on = pd.Series(np.ones(len(self._on), dtype=bool), index=self._on.index)
+        valid_off = pd.Series(np.ones(len(self._off), dtype=bool), index=self._off.index)
+
+        N = np.maximum(self._off.index.max(), self._on.index.max())
+
+        for i in range(N + 1):
+            if i in self._off.index:
+                valid_off[i] = np.isin(self._off[i], list(is_on))
+                is_on.difference_update(self._off[i])
+            if i in self._on.index:
+                valid_on[i] = ~np.isin(self._on[i], list(is_on))
+                is_on.update(self._on[i])
+        
+        if copy:
+            return StructurallyPlasticMatrix(self._edge_indices, vertex_properties=self._vertex_properties,
+                                             edge_properties=self._edges, default_edge_property=self._default_edge,
+                                             shape=self._shape,
+                                             edge_off=self._off[valid_off],
+                                             edge_on=self._on[valid_on], check_consistency=False)
+        
+        self._on = self._on[valid_on]; self._off = self._off[valid_off]
+        return self
     
     @classmethod
     def from_matrix_stack(cls, mats, vertex_labels=None, vertex_properties=None,
