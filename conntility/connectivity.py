@@ -496,6 +496,7 @@ class ConnectivityMatrix(object):
         return res
     
     def condense(self, by_columns, str_original="_idxx_in_original"):
+        if isinstance(by_columns, str): return self.condense([by_columns], str_original=str_original)
         orig_vtx = self.vertices
         orig_vtx[str_original] = range(len(orig_vtx))
         orig_vtx = orig_vtx.groupby(by_columns)[str_original].apply(list).sort_index()
@@ -504,18 +505,54 @@ class ConnectivityMatrix(object):
                                axis=1, keys=by_columns)
         edge_table.columns = edge_table.columns.reorder_levels([1, 0])
         node_idx = pd.Series(range(len(orig_vtx)), index=orig_vtx.index)
+
         orig_vtx.index = node_idx.values
 
-        def lookup(entry):
-            return pd.Series({
-                "row": node_idx.__getitem__(tuple(entry["row"])),
-                "col": node_idx.__getitem__(tuple(entry["col"]))
-            })
-        edges = edge_table.apply(lookup, axis=1).value_counts()
+        if len(by_columns) == 1:
+            edges = pd.DataFrame({
+                        "row": node_idx[edge_table["row"][by_columns[0]]].values,
+                        "col": node_idx[edge_table["col"][by_columns[0]]].values},
+                        index=edge_table.index).value_counts()
+        else:
+            def lookup(entry):
+                return pd.Series({
+                    "row": node_idx.__getitem__(tuple(entry["row"])),
+                    "col": node_idx.__getitem__(tuple(entry["col"]))
+                })
+            edges = edge_table.apply(lookup, axis=1).value_counts()
         MC = ConnectivityMatrix(edges.index.to_frame(), edge_properties={"count": edges.values},
                              shape=(len(orig_vtx), len(orig_vtx)), default_edge_property="count",
                              vertex_properties=orig_vtx.sort_index().to_frame())
         return MC
+    
+    def modularity(self, with_respect_to, resolution_param=0.0):
+        if isinstance(with_respect_to, str): return self.modularity([with_respect_to], resolution_param=resolution_param)
+        edge_table = pd.concat([self.edge_associated_vertex_properties(_use) for _use in with_respect_to],
+                               axis=1, keys=with_respect_to)
+        edge_table.columns = edge_table.columns.reorder_levels([1, 0])
+
+        in_module = (edge_table["row"] == edge_table["col"]).all(axis=1)
+        edge_table[("value", "value")] = self.edges[self._default_edge].values
+
+        sm = edge_table["value", "value"].sum()  # Total sum of weights in network
+        # Sum of weights outgoing / incoming from each module
+        frac_out = edge_table[["row", "value"]].droplevel(0, axis=1).groupby(with_respect_to)["value"].agg("sum")
+        frac_in = edge_table[["col", "value"]].droplevel(0, axis=1).groupby(with_respect_to)["value"].agg("sum")
+
+        expected = (frac_out * frac_in / sm)  # For each module: Expected sum of weights of connections within the module
+        # Actual sums of weights within
+        real = edge_table[["row", "value"]].droplevel(0, axis=1).loc[in_module]
+        real = real.groupby(with_respect_to)["value"].agg("sum")
+        mdlrty = real.subtract(expected, fill_value=0) / sm  # Normalized difference between real and expected
+
+        if resolution_param != 0:
+            # Number of potential connections in each module (no autapses!)
+            if len(with_respect_to) == 1:
+                npairs = self.vertices[with_respect_to[0]].value_counts().apply(lambda x: x ** 2 - x).sort_index()
+            else:
+                npairs = self.vertices[with_respect_to].value_counts().apply(lambda x: x ** 2 - x).sort_index()
+            mdlrty = (real.divide(npairs, fill_value=0) ** resolution_param) * mdlrty
+        return mdlrty
 
     @classmethod
     def from_h5(cls, fn, group_name=None, prefix=None):
