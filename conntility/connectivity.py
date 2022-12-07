@@ -494,6 +494,28 @@ class ConnectivityMatrix(object):
         for analysis in analyses:
             res[analysis._name] = analysis.apply(self)
         return res
+    
+    def condense(self, by_columns, str_original="_idxx_in_original"):
+        orig_vtx = self.vertices
+        orig_vtx[str_original] = range(len(orig_vtx))
+        orig_vtx = orig_vtx.groupby(by_columns)[str_original].apply(list).sort_index()
+
+        edge_table = pd.concat([self.edge_associated_vertex_properties(_use) for _use in by_columns],
+                               axis=1, keys=by_columns)
+        edge_table.columns = edge_table.columns.reorder_levels([1, 0])
+        node_idx = pd.Series(range(len(orig_vtx)), index=orig_vtx.index)
+        orig_vtx.index = node_idx.values
+
+        def lookup(entry):
+            return pd.Series({
+                "row": node_idx.__getitem__(tuple(entry["row"])),
+                "col": node_idx.__getitem__(tuple(entry["col"]))
+            })
+        edges = edge_table.apply(lookup, axis=1).value_counts()
+        MC = ConnectivityMatrix(edges.index.to_frame(), edge_properties={"count": edges.values},
+                             shape=(len(orig_vtx), len(orig_vtx)), default_edge_property="count",
+                             vertex_properties=orig_vtx.sort_index().to_frame())
+        return MC
 
     @classmethod
     def from_h5(cls, fn, group_name=None, prefix=None):
