@@ -525,8 +525,23 @@ class ConnectivityMatrix(object):
                              vertex_properties=orig_vtx.sort_index().to_frame())
         return MC
     
-    def modularity(self, with_respect_to, resolution_param=0.0):
+    def __modularity_sknetwork__(self, with_respect_to, resolution_param=None):
+        from sknetwork.clustering import get_modularity
+        if isinstance(with_respect_to, str):
+            return self.__modularity_sknetwork__([with_respect_to], resolution_param=resolution_param)
+        if resolution_param is None: resolution_param = 1.0
+
+        rel_data = self.vertices[with_respect_to]
+        idxx = pd.MultiIndex.from_frame(rel_data).unique().sort_values()
+        idxx = pd.Series(range(len(idxx)), index=idxx)
+        labels = rel_data.apply(lambda x: idxx.__getitem__(tuple(x)), axis=1)
+        return get_modularity(self.matrix, labels.values, resolution=resolution_param)
+    
+    def modularity(self, with_respect_to, resolution_param=None, implementation="sknetwork"):
+        if implementation == "sknetwork": return self.__modularity_sknetwork__(with_respect_to, resolution_param)
         if isinstance(with_respect_to, str): return self.modularity([with_respect_to], resolution_param=resolution_param)
+        if resolution_param is None: resolution_param = 0.0
+
         edge_table = pd.concat([self.edge_associated_vertex_properties(_use) for _use in with_respect_to],
                                axis=1, keys=with_respect_to)
         edge_table.columns = edge_table.columns.reorder_levels([1, 0])
