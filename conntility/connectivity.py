@@ -526,7 +526,10 @@ class ConnectivityMatrix(object):
         return MC
     
     def __modularity_sknetwork__(self, with_respect_to, resolution_param=None):
-        from sknetwork.clustering import get_modularity
+        try:
+            from sknetwork.clustering import get_modularity as modularity
+        except ImportError:
+            from sknetwork.clustering import modularity
         if isinstance(with_respect_to, str):
             return self.__modularity_sknetwork__([with_respect_to], resolution_param=resolution_param)
         if resolution_param is None: resolution_param = 1.0
@@ -535,11 +538,12 @@ class ConnectivityMatrix(object):
         idxx = pd.MultiIndex.from_frame(rel_data).unique().sort_values()
         idxx = pd.Series(range(len(idxx)), index=idxx)
         labels = rel_data.apply(lambda x: idxx.__getitem__(tuple(x)), axis=1)
-        return get_modularity(self.matrix, labels.values, resolution=resolution_param)
+        return modularity(self.matrix, labels.values, resolution=resolution_param)
     
     def modularity(self, with_respect_to, resolution_param=None, implementation="sknetwork"):
         if implementation == "sknetwork": return self.__modularity_sknetwork__(with_respect_to, resolution_param)
-        if isinstance(with_respect_to, str): return self.modularity([with_respect_to], resolution_param=resolution_param)
+        if isinstance(with_respect_to, str): return self.modularity([with_respect_to], resolution_param=resolution_param,
+                                                                    implementation=implementation)
         if resolution_param is None: resolution_param = 0.0
 
         edge_table = pd.concat([self.edge_associated_vertex_properties(_use) for _use in with_respect_to],

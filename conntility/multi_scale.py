@@ -93,7 +93,7 @@ class MultiScaleConnectome(object):
         return ret
     
     def nrn(self):
-        if self.isleaf():
+        if self.isleaf:
             return self._children
         return pandas.concat([x.nrn() for x in self._children])
     
