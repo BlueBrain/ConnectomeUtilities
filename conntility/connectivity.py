@@ -495,6 +495,14 @@ class ConnectivityMatrix(object):
             res[analysis._name] = analysis.apply(self)
         return res
     
+    def partition(self, by_columns):
+        if isinstance(by_columns, str): return self.partition([by_columns])
+        rel_data = self.vertices[by_columns]
+        grp = rel_data.reset_index().groupby(by_columns).apply(lambda x: self.subpopulation(x["index"]))
+        if len(by_columns) == 1:
+            grp.index = pd.MultiIndex.from_frame(grp.index.to_frame())
+        return ConnectivityGroup(grp)
+    
     def condense(self, by_columns, str_original="_idxx_in_original"):
         if isinstance(by_columns, str): return self.condense([by_columns], str_original=str_original)
         orig_vtx = self.vertices
@@ -524,6 +532,17 @@ class ConnectivityMatrix(object):
                              shape=(len(orig_vtx), len(orig_vtx)), default_edge_property="count",
                              vertex_properties=orig_vtx.sort_index().to_frame())
         return MC
+    
+    def core_decomposition(self, str_core_label="_core_decomposition"):
+        from sknetwork.topology import CoreDecomposition
+        from sknetwork.utils import directed2undirected
+
+        core = CoreDecomposition()
+        labels = core.fit_transform(directed2undirected(self.matrix.tocsr()))
+        self.add_vertex_property(str_core_label, labels)
+        ret = self.partition(str_core_label)
+        self._vertex_properties.drop(str_core_label, axis=1, inplace=True)
+        return ret
     
     def __modularity_sknetwork__(self, with_respect_to, resolution_param=None):
         try:
@@ -572,6 +591,8 @@ class ConnectivityMatrix(object):
                 npairs = self.vertices[with_respect_to].value_counts().apply(lambda x: x ** 2 - x).sort_index()
             mdlrty = (real.divide(npairs, fill_value=0) ** resolution_param) * mdlrty
         return mdlrty
+    
+
 
     @classmethod
     def from_h5(cls, fn, group_name=None, prefix=None):
@@ -923,6 +944,7 @@ class TimeDependentMatrix(ConnectivityMatrix):
 
 
 class ConnectivityInSubgroups(ConnectivityMatrix):
+    # TODO: This functionality can be in the main ConnectivityMatrix
 
     def __extract_vertex_ids__(self, an_obj):
         if isinstance(an_obj, str):
