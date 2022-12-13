@@ -165,7 +165,7 @@ def _grouped_by_filtering_config(lst_fltr_cfg, matrix_func):
         return out_function
     return decorator
 
-def control_by_randomization(randomization, n_randomizations=10, **rand_kwargs):
+def control_by_randomization(randomization, n_randomizations=10, only_mean=True, **rand_kwargs):
     if hasattr(randomization, "apply"):
         func = randomization.apply
         rand_name = randomization.name
@@ -182,13 +182,23 @@ def control_by_randomization(randomization, n_randomizations=10, **rand_kwargs):
                 ) for _ in range(n_randomizations)
             ]
             if isinstance(base_val, pandas.Series):
-                cmp_vals = pandas.concat(cmp_vals, axis=1).mean(axis=1)
+                if only_mean:
+                    cmp_vals = pandas.concat(cmp_vals, axis=1).mean(axis=1)
+                else:
+                    cmp_vals = pandas.concat(cmp_vals, axis=0, keys=[i for i in range(len(cmp_vals))],
+                                             names=["Instance"])
+                    base_val = pandas.concat([base_val], axis=0, keys=[0], names=["Instance"])
                 return pandas.concat(
                     [base_val, cmp_vals], axis=0, copy=False,
                     keys=["data", rand_name], names=["Control"]
                 )
-            cmp_vals = numpy.nanmean(cmp_vals)
-            return pandas.Series([base_val, cmp_vals], index=["data", rand_name])
+            if only_mean:
+                cmp_vals = numpy.nanmean(cmp_vals)
+                return pandas.Series([base_val, cmp_vals], index=["data", rand_name])
+            midx = pandas.MultiIndex.from_tuples([("data", 0)] + 
+                              [(rand_name, i) for i in range(len(cmp_vals))],
+                              names=["Control", "Instance"])
+            return pandas.Series([base_val] + cmp_vals, index=midx)
         return out_function
     return decorator
 
