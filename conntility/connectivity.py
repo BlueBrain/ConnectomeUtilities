@@ -497,8 +497,8 @@ class ConnectivityMatrix(object):
     
     def partition(self, by_columns):
         if isinstance(by_columns, str): return self.partition([by_columns])
-        rel_data = self.vertices[by_columns]
-        grp = rel_data.reset_index().groupby(by_columns).apply(lambda x: self.subpopulation(x["index"]))
+        str_idx = self._vertex_properties.index.name or "index"
+        grp = self.vertices.groupby(by_columns).apply(lambda x: self.subpopulation(x[str_idx]))
         if len(by_columns) == 1:
             grp.index = pd.MultiIndex.from_frame(grp.index.to_frame())
         return ConnectivityGroup(grp)
@@ -557,7 +557,7 @@ class ConnectivityMatrix(object):
         idxx = pd.MultiIndex.from_frame(rel_data).unique().sort_values()
         idxx = pd.Series(range(len(idxx)), index=idxx)
         labels = rel_data.apply(lambda x: idxx.__getitem__(tuple(x)), axis=1)
-        return modularity(self.matrix, labels.values, resolution=resolution_param)
+        return modularity(self.matrix.tocsr(), labels.values, resolution=resolution_param)
     
     def modularity(self, with_respect_to, resolution_param=None, implementation="sknetwork"):
         if implementation == "sknetwork": return self.__modularity_sknetwork__(with_respect_to, resolution_param)
