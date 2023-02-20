@@ -379,7 +379,7 @@ def _make_node_lookup(circ, neuron_groups, column_gid, fill_unused_gids=True):
         full_lookup = pandas.concat([node_lookup,
                                      pandas.Series([STR_VOID] * len(missing_gids),
                                                    index=missing_gids)], axis=0)
-        node_lookup = pandas.Series(pandas.Categorical(full_lookup), index=node_lookup.index, name=node_lookup.name)
+        node_lookup = pandas.Series(pandas.Categorical(full_lookup), index=full_lookup.index, name=node_lookup.name)
     return node_lookup
 
 
