@@ -73,12 +73,14 @@ def input_innervation_from_matrix(spikes, matrix, gids_pre, t_win=None):
     return innervation
 
 
-def input_innervation(sim, base_target=None, neuron_properties=[], t_wins=None):
+def input_innervation(sim, base_target=None, proj_names=None, neuron_properties=[], t_wins=None):
     """
     How strongly each neuron is innervated by the simulation input spikes
     Input:
     sim (bluepy.Simulation)
     base_target (str): Name of the neuron target to count innervation for.
+    proj_names (list): List of strings of names of projections to consider. Default: None,
+    which considers all projections.
     neuron_properties (list): List of anatomical neuron properties to return
     in addition.
     t_wins (optional, list of tuples): List of time windows of interest. If not
@@ -107,7 +109,7 @@ def input_innervation(sim, base_target=None, neuron_properties=[], t_wins=None):
     nrn = pandas.concat([nrn], keys=["neurons"], names=["__cell_type"])
     nrn = nrn.set_index(nrn.index.droplevel(-1))
 
-    projections = load_all_projection_locations(circ, [])
+    projections = load_all_projection_locations(circ, [], proj_names=proj_names)
     projections[GID] = projections[FIBER_GID]
     proj_gids = projections.groupby("projection").apply(lambda x: x[GID].values)
 

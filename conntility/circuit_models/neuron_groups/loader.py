@@ -72,7 +72,7 @@ def load_projection_locations(circ, properties, projection_name, **kwargs):
     return vfib
 
 
-def load_all_projection_locations(circ, properties, **kwargs):
+def load_all_projection_locations(circ, properties, proj_names=None, **kwargs):
     """
     Loads anatomical information about projection fibers innervating a Circuit.
     Provides access to the following properties:
@@ -86,15 +86,17 @@ def load_all_projection_locations(circ, properties, **kwargs):
     ss_flat_y: Supersampled flat mapped y coordinate (approximately in um)
     depth: Approximate cortical depth of a neuron in um
 
-    Will load ALL projections listed in the CircuitConfig and return a DataFrame
-    indexed by the name of the projections.
+    The list of projections to load can be provided, otherwise ALL projections listed 
+    in the CircuitConfig will be considered. A DataFrame indexed by the name of the 
+    projections is returned.
 
     Input:
     circ (bluepy.Circuit): The Circuit to load fibers from
     properties (list-like): List with names of properties to load. Can contain anything
     listed above.
     """
-    proj_names = list(circ.config.get('projections', {}).keys())
+    if proj_names is None:
+        proj_names = list(circ.config.get('projections', {}).keys())
     projs = pandas.concat([
         load_projection_locations(circ, properties, proj, **kwargs)
         for proj in proj_names
