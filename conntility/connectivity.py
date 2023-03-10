@@ -335,10 +335,11 @@ class ConnectivityMatrix(object):
 
     @property
     def vertex_properties(self):
+        # TODO: Think about adding GID here as well?
         return self._vertex_properties.columns.values
     
     def edge_associated_vertex_properties(self, prop_name):
-        assert prop_name in self.vertex_properties, "{0} is not a vertex property: {1}".format(prop_name, self.vertex_properties)
+        assert (prop_name in self.vertex_properties) or (prop_name == GID), "{0} is not a vertex property: {1}".format(prop_name, self.vertex_properties)
         eavp = pd.concat(
             [self.vertices[prop_name][self._edge_indices[_idx]].rename(_idx).reset_index(drop=True)
              for _idx in self._edge_indices.columns],
