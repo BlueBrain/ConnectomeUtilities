@@ -1,6 +1,6 @@
 test-job:
   tags:
-    - bb5_user
+    - bb5_map
   variables:
     bb5_account: proj83
   stage: test
