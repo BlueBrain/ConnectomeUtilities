@@ -7,7 +7,7 @@ last modified: 01.2022
 import h5py
 import numpy as np
 import pandas as pd
-from scipy import sparse
+from scipy import sparse, stats
 
 from .circuit_models.neuron_groups.defaults import GID
 from .circuit_models.connection_matrix import LOCAL_CONNECTOME
@@ -397,7 +397,7 @@ class ConnectivityMatrix(object):
         return an_obj
 
     @classmethod
-    def from_bluepy(cls, bluepy_obj, load_config=None, gids=None, connectome=LOCAL_CONNECTOME):
+    def from_bluepy(cls, bluepy_obj, load_config=None, gids=None, connectome=LOCAL_CONNECTOME, **kwargs):
         """
         BlueConfig/CircuitConfig based constructor
         :param bluepy_obj: bluepy Simulation or Circuit object
@@ -423,7 +423,7 @@ class ConnectivityMatrix(object):
             nrn = nrn.loc[nrn.index.intersection(gids)]
         # TODO: think a bit about if it should even be possible to call this for a projection (remove arg. if not...)
         # TODO: Add option to look up synapse properties here
-        mat = circuit_connection_matrix(circ, for_gids=nrn.index.values, connectome=connectome)
+        mat = circuit_connection_matrix(circ, for_gids=nrn.index.values, connectome=connectome, **kwargs)
         return cls(mat, vertex_properties=nrn)
 
     def submatrix(self, sub_gids, edge_property=None, sub_gids_post=None):
@@ -460,6 +460,71 @@ class ConnectivityMatrix(object):
         return ConnectivityMatrix(subindex.row, subindex.col, vertex_properties=out_vertices,
                                   edge_properties=out_edges, default_edge_property=self._default_edge,
                                   shape=(len(subpop_ids), len(subpop_ids)))
+    
+    def slice(self, angle, position, thickness, columns_slice=["x", "z"], column_y="y"):
+        """A ConnectivityMatrix object representing the subpopulation given by a slicing operation.
+        First, a slice-specific coordinate system is defined, based on existing coordinates in the
+        vertex properties of the object and a specified rotation. The population is then sliced in
+        the "depth" coordinate of those coordinates at the specified position, with the specified 
+        thickness.
+
+        The slice-specific coordinates are as follows: 
+          "slice_x" is given by applying the specified rotation angle to the coordinates in
+          "columns_slice".
+          "slice_y" is given by "column_y".
+          "slice_depth" is orthogonal to "slice_x".
+
+        In summary, angle and position can be randomly chosen within reasonable bounds to generate
+        different slices from the population. thickness should be chosed in accordance with the 
+        in-vitro experiment one is trying to emulate. column_y should be the coordinate one wants 
+        to preserve unchanged in the slice, e.g. cortical depth. columns_slice should be the other
+        two coordinates. 
+        """
+        v = self._vertex_properties[columns_slice].values
+        m = np.array([[np.cos(angle), -np.sin(angle)],
+                        [np.sin(angle), np.cos(angle)]])
+        V = np.dot(v - np.nanmean(v, axis=0, keepdims=True), m) - np.array([[0, position]])
+        in_slice = np.abs(V[:, 1]) < (thickness / 2)
+        slice_gids = self.gids[in_slice]
+        ret_slice = self.subpopulation(slice_gids)
+
+        slice_y = self._vertex_properties[column_y].values[in_slice]
+        ret_slice.add_vertex_property("slice_x", V[in_slice, 0])
+        ret_slice.add_vertex_property("slice_y", slice_y)
+        ret_slice.add_vertex_property("slice_depth", V[in_slice, 1])
+
+        return ret_slice
+
+    def patch_sample(self, n, mv_mn, mv_cv, columns_xy=["x", "y"], avoidance_range=10.,
+                     lim_seed=1., lim_neighborhood=3.):
+        nrn_slice = self._vertex_properties[columns_xy]
+        avoidance_range = np.maximum(avoidance_range, 1E-4)  # To avoid division by zero
+        p_dist = stats.multivariate_normal(mv_mn, mv_cv)
+
+        marginal_sd = np.sqrt(np.diag(mv_cv))
+        vv = ((nrn_slice - nrn_slice.mean()) / nrn_slice.std()).abs() < lim_seed
+        idxx = np.nonzero(vv.all(axis=1).values)[0]
+
+        seed_nrn = vv.index[np.random.choice(idxx)]
+        seed = nrn_slice.loc[seed_nrn]
+        
+        zscored = ((nrn_slice - seed) / marginal_sd).abs()
+        v_neighborhood = (zscored < lim_neighborhood).all(axis=1) & (zscored > 0.).any(axis=1)
+        neighborhood = nrn_slice.loc[v_neighborhood]
+        neurons = pd.concat([seed], axis=1).transpose()
+        
+        other_idx = []
+        while len(neurons) < n:
+            delta = neighborhood.values.reshape((-1, 1, 2)) - neurons.values.reshape((1, -1, 2))
+            avoidance = np.minimum(np.sqrt(np.sum(delta ** 2, axis=-1)) / avoidance_range, 1.)
+            p_vec = 1E3 * p_dist.pdf(delta).reshape((-1, len(neurons))) * avoidance
+            p_vec = np.prod(p_vec, axis=1)
+            
+            p_vec = p_vec / p_vec.sum()
+            new_idx = np.random.choice(len(p_vec), p=p_vec)
+            other_idx.append(new_idx) 
+            neurons = pd.concat([neurons, neighborhood.iloc[[new_idx]]], axis=0)
+        return self.subpopulation(neurons.index)
 
     def subedges(self, subedge_indices):
         """A ConnectivityMatrix object representing the specified subpopulation"""
@@ -470,6 +535,67 @@ class ConnectivityMatrix(object):
 
         return ConnectivityMatrix(rowcol["row"], rowcol["col"], vertex_properties=self._vertex_properties,
         edge_properties=out_edges, default_edge_property=self._default_edge, shape=self._shape)
+    
+    def _active_in_transmission_response(self, eavp, spks_row, spks_col, max_delta_t):
+        """Returns boolean array with an entry for each edge. True, if it is active in the transmission
+        response graph for the given spiking activity.
+        """
+        _v = np.isin(eavp["row"], spks_row) & np.isin(eavp["col"], spks_col)
+        spks_row = spks_row.reset_index().groupby("gid").agg(list)
+        spks_col = spks_col.reset_index().groupby("gid").agg(list)
+
+        row_t = spks_row.loc[eavp["row"][_v]].reset_index(drop=True).applymap(lambda x: np.vstack(x))
+        col_t = spks_col.loc[eavp["col"][_v]].reset_index(drop=True).applymap(lambda x: np.array([x]))
+
+        def any_match(series, max_delta_t=5.0):
+            delta = series.values[1] - series.values[0]
+            return np.any((delta > 0) & (delta <= max_delta_t))
+
+        _v[_v] = pd.concat([row_t, col_t], axis=1).aggregate(any_match, axis=1, max_delta_t=max_delta_t)
+        return _v
+
+    def transmission_response(self, spks, t_wins, max_delta_t):
+        """
+        Returns the transmission response matrices for the given spiking activity in specified time
+        windows.
+        """
+        spks = spks.loc[np.isin(spks, self.vertices[GID])]
+        t_wins = np.array(t_wins).reshape((-1, 2))
+        
+        eavp = self.edge_associated_vertex_properties("gid")
+        for t_start, t_end in t_wins:
+            spks_row = spks[t_start:t_end]
+            spks_col = spks[t_start:(t_end+max_delta_t)]
+            v = self._active_in_transmission_response(eavp, spks_row, spks_col, max_delta_t)
+            yield self.subedges(v)
+    
+    def transmission_response_rates(self, spks, t_wins, max_delta_t, show_progress=False,
+                                    normalize="mean"):
+        spks = spks.loc[np.isin(spks, self.vertices[GID])]
+        t_wins = np.array(t_wins).reshape((-1, 2))
+        assert normalize in ["mean", "sum", "pre"], "Unknown normalization: {0}".format(normalize)
+
+        def empty(arg_in):
+            for _x in arg_in: yield(_x)
+        gen = empty
+        if show_progress:
+            from tqdm import tqdm
+            gen = tqdm
+        
+        eavp = self.edge_associated_vertex_properties("gid")
+        p = []
+        for t_start, t_end in gen(t_wins):
+            spks_row = spks[t_start:t_end]
+            spks_col = spks[t_start:(t_end+max_delta_t)]
+            v = self._active_in_transmission_response(eavp, spks_row, spks_col, max_delta_t)
+            if normalize == "mean":
+                p.append(v.mean())
+            elif normalize == "sum":
+                p.append(v.sum())
+            elif normalize == "pre":
+                den = np.isin(eavp["row"], spks_row).sum()
+                p.append(v.sum() / den)
+        return np.array(p)
 
     def random_n_gids(self, ref):
         """Randomly samples `ref` number of neurons if `ref` is and int,
