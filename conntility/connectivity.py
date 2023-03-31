@@ -1006,7 +1006,7 @@ class TimeDependentMatrix(ConnectivityMatrix):
     def from_report(cls, sim, report_cfg, load_cfg=None, presyn_mapping=None):
         """
         A sonata synapse (compartment) report based constructor
-        :param sim: bluepy Simulation object
+        :param sim: bluepysnap Simulation object
         :param report_cfg: config dict with report's name, time steps to load,
                            static property name to look up for synapses that aren't reported,
                            and optionally the names of the aggregation functions to use
@@ -1018,56 +1018,7 @@ class TimeDependentMatrix(ConnectivityMatrix):
                                        None (default) in which case the mapping will be calculated on the fly
         :return: a TimeDependentMatrix object
         """
-        from .io.synapse_report import sonata_report, load_report, get_presyn_mapping, reindex_report, aggregate_data
-        from .circuit_models.neuron_groups.grouping_config import load_filter
-
-        load_config = _update_load_config(load_cfg, sim.config.Run["CircuitTarget"])
-        nrn = load_filter(sim.circuit, load_config)
-        lo_gids = pd.Series(range(len(nrn["gid"])), index=nrn["gid"])
-        # TODO: What if the report is not on the local connectome?
-
-        report, report_gids = sonata_report(sim, report_cfg)
-        tgt_report_gids = np.intersect1d(nrn["gid"], report_gids)
-        non_report_gids = np.setdiff1d(nrn["gid"], tgt_report_gids)
-        data = load_report(report, report_cfg, tgt_report_gids)  # load only target post_gids
-
-        if presyn_mapping is None or len(tgt_report_gids) < len(report_gids):
-            # the saved mapping is defined based on the full report, so if parts are loaded one would need to filter
-            # the mapping as well at which point, it's faster to just recalculate the whole thing
-            presyn_mapping = get_presyn_mapping(sim.circuit.config["connectome"], data.index)
-        if not isinstance(presyn_mapping, pd.DataFrame):
-            presyn_mapping = pd.read_pickle(presyn_mapping)
-
-        data = reindex_report(data, presyn_mapping)
-        data = data.iloc[data.index.get_level_values(0).isin(nrn["gid"])]  # filter to have only target pre_gids
-        print("Report read! Starting aggregation of {0} data points...".format(data.shape))
-
-        edges = aggregate_data(data, report_cfg, lo_gids)
-
-        if len(non_report_gids) > 0:
-            from .circuit_models import circuit_connection_matrix
-            print("Looking up static values for non-reported postsynaptic neurons...")
-            agg_funcs = list(edges.columns.levels[0])
-            time_stamps = edges.columns.levels[1]
-            lo_nr_gids = pd.Series(non_report_gids)
-            Ms = circuit_connection_matrix(sim.circuit, for_gids=nrn["gid"], for_gids_post=non_report_gids,
-                                           edge_property=report_cfg["static_prop_name"], agg_func=agg_funcs)
-            stat_edges = [pd.DataFrame.from_dict({t: Ms[agg_func].tocoo().data for t in time_stamps})
-                          for agg_func in agg_funcs]
-            stat_edges = pd.concat(stat_edges, axis=1, copy=False,  keys=agg_funcs)
-            stat_edges.columns.set_names(edges.columns.names, inplace=True)
-            # map (non-reported, local) col idx to gids and then back to (global) col idx
-            stat_col_idx = lo_gids[lo_nr_gids[Ms[agg_funcs[0]].tocoo().col]].to_numpy()
-            stat_edges.index = pd.MultiIndex.from_arrays(np.array([Ms[agg_funcs[0]].tocoo().row, stat_col_idx]),
-                                                         names=["row", "col"])
-            edges = edges.append(stat_edges)
-            edges.sort_index(inplace=True)
-
-        new_idxx = pd.RangeIndex(len(edges))
-        edge_ids = edges.index.to_frame().set_index(new_idxx)
-        edges = edges.set_index(new_idxx)
-        shape = (len(nrn), len(nrn))
-        return cls(edge_ids, edge_properties=edges, vertex_properties=nrn.set_index("gid"), shape=shape)
+        raise NotImplementedError("Instantiation from report currently not available!")
 
 
 class ConnectivityInSubgroups(ConnectivityMatrix):
@@ -1119,8 +1070,8 @@ class ConnectivityGroup(object):
     @classmethod
     def from_bluepy(cls, bluepy_obj, load_config=None, connectome=LOCAL_CONNECTOME, **kwargs):
         """
-        BlueConfig/CircuitConfig based constructor
-        :param bluepy_obj: bluepy Simulation or Circuit object
+        Sonata config based constructor
+        :param bluepy_obj: bluepysnap Simulation or Circuit object
         :param load_config: config dict for loading and filtering neurons from the circuit
         :param connectome: str. that can be "local" which specifies local circuit connectome
                            or the name of a projection to use

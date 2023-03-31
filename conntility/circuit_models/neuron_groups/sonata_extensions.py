@@ -1,4 +1,4 @@
-import os
+import os, pandas
 
 from .defaults import VIRTUAL_FIBERS_FN
 
@@ -80,3 +80,46 @@ def projection_list(circ, return_filename_dict=False):
     projections = [os.path.split(_x)[0] for _x in projections]
     return projections
 
+def input_spikes(sim):
+    """
+    Returns a pandas.Series of the input spikes given to a Simulation.
+    Input:
+    sim (bluepysnap.Simulation)
+
+    Returns:
+    spikes, pandas.Series of input spike ids. Formatted the same as Simulation.spikes
+    (i.e. the output spikes).
+    """
+    # TODO: UPDATE FOR SONATA!
+    def read_csv(path):
+        data = pandas.read_csv(path, delim_whitespace=True)["/scatter"]
+        data.name = "gid"
+        data.index.name = "t"
+        return data
+
+    sim_root = sim._config._config_dir
+
+    stim = [stim for stim in sim.config.typed_sections("Stimulus") if stim["Pattern"] == "SynapseReplay"]
+    if len(stim) == 0:
+        return pandas.Series([], index=pandas.Float64Index([], name="t"), name="gid", dtype=float)
+
+    stim = [_stim["SpikeFile"] for _stim in stim]
+    stim = [_stim if os.path.isabs(_stim) else os.path.join(sim_root, _stim) for _stim in stim]
+    spks = pandas.concat([read_csv(_stim) for _stim in stim], axis=0)
+    return spks
+
+def simulation_conditions(sim):
+    """
+    Return simulation conditions of a bluepysnap.Simulation, looked up from
+    the associated sim_conditions.json, if it exists
+    """
+    from os import path
+    import json
+    
+    sim_path = sim._config._config_dir
+    sim_json = sim_path + "sim_conditions.json"
+    if not path.isfile(sim_json):
+        return {}
+    with open(sim_json, "r") as fid:
+        conds = json.load(fid)
+    return conds

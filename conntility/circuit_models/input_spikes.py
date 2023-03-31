@@ -1,36 +1,7 @@
 import pandas
 import numpy
-import os
 
-
-def input_spikes(sim):
-    """
-    Returns a pandas.Series of the input spikes given to a Simulation.
-    Input:
-    sim (bluepy.Simulation)
-
-    Returns:
-    spikes, pandas.Series of input spike ids. Formatted the same as Simulation.spikes
-    (i.e. the output spikes).
-    """
-    # TODO: UPDATE FOR SONATA!
-    def read_csv(path):
-        data = pandas.read_csv(path, delim_whitespace=True)["/scatter"]
-        data.name = "gid"
-        data.index.name = "t"
-        return data
-
-    sim_path = sim.config._path
-    sim_root = os.path.split(sim_path)[0]
-
-    stim = [stim for stim in sim.config.typed_sections("Stimulus") if stim["Pattern"] == "SynapseReplay"]
-    if len(stim) == 0:
-        return pandas.Series([], index=pandas.Float64Index([], name="t"), name="gid", dtype=float)
-
-    stim = [_stim["SpikeFile"] for _stim in stim]
-    stim = [_stim if os.path.isabs(_stim) else os.path.join(sim_root, _stim) for _stim in stim]
-    spks = pandas.concat([read_csv(_stim) for _stim in stim], axis=0)
-    return spks
+from .neuron_groups.sonata_extensions import input_spikes
 
 
 def input_innervation_from_matrix(spikes, matrix, gids_pre, t_win=None):
@@ -78,7 +49,7 @@ def input_innervation(sim, base_target=None, proj_names=None, neuron_properties=
     """
     How strongly each neuron is innervated by the simulation input spikes
     Input:
-    sim (bluepy.Simulation)
+    sim (bluepysnap.Simulation)
     base_target (str): Name of the neuron target to count innervation for.
     proj_names (list): List of strings of names of projections to consider. Default: None,
     which considers all projections.
@@ -104,8 +75,8 @@ def input_innervation(sim, base_target=None, proj_names=None, neuron_properties=
     spikes = input_spikes(sim)
     circ = sim.circuit
 
-    if base_target is None:
-        base_target = sim.config.Run["CircuitTarget"]
+    # if base_target is None:  # TODO: How does this work in Sonata?
+    #     base_target = sim.config.Run["CircuitTarget"]
     nrn = load_neurons(circ, neuron_properties, base_target=base_target)
 
     nrn = pandas.concat([nrn], keys=["neurons"], names=["__cell_type"])
