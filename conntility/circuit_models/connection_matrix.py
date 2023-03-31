@@ -3,9 +3,11 @@ import h5py
 import numpy
 import tqdm
 import pandas
+import os
 from scipy import sparse
 
 from .neuron_groups.defaults import GID
+from .neuron_groups.sonata_extensions import projection_list
 
 LOCAL_CONNECTOME = "local"
 STR_VOID = "VOID"
@@ -15,17 +17,23 @@ def find_sonata_connectome(circ, connectome, return_sonata_file=True):
     """
     Returns the sonata connectome associated with a named projection; or the default "local" connectome.
     Input:
-    circ (bluepy.Circuit)
+    circ (bluepysnap.Circuit)
     connectome (str): Name of the projection to look up. Use "local" for the default local (i.e. touch-based) connectome
     return_sonata_file (optional): If true, returns the path of the .h5 file. Else returns a bluepy.Connectome.
     """
+    if connectome == LOCAL_CONNECTOME: connectome = "default"
     if return_sonata_file:
-        if connectome == LOCAL_CONNECTOME:
-            return circ.config["connectome"]
-        return circ.config["projections"][connectome]
-    if connectome == LOCAL_CONNECTOME:
-        return circ.connectome
-    return circ.projection[connectome]
+        if connectome in circ.edges:
+            return circ.edges[connectome].h5_filepath
+        proj_list = projection_list(circ, return_filename_dict=True)
+        if connectome in proj_list: 
+            return proj_list[connectome]
+    if connectome in circ.edges:
+        return circ.edges[connectome]
+    proj_list = projection_list(circ)
+    if connectome in proj_list:
+        raise RuntimeError("Old style connectome {0} can only be returned as filename reference".format(connectome))
+    raise RuntimeError("Connectome {0} not found!".format(connectome))
 
 
 def full_connection_matrix(sonata_fn, n_neurons=None, population="default",
@@ -131,10 +139,10 @@ def _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_p
     """
     h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
 
-    idx = numpy.array(gids) - 1  # From gids to sonata "node" indices (base 0 instead of base 1)
+    idx = numpy.array(gids)
     if gids_post is None:
         gids_post = gids
-    idx_post = numpy.array(gids_post) - 1
+    idx_post = numpy.array(gids_post)
     rv_index = pandas.Series(range(len(idx)), index=idx)
     N = len(gids)
     M = len(gids_post)
@@ -157,7 +165,7 @@ def _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_p
                 indices.extend(row_ids)
                 data_pre = pandas.Series(numpy.hstack(data_pre), index=ids_pre)
                 data_pre = data_pre[data_pre.index.intersection(idx)]
-                data.extend(data_pre.groupby(level=0).apply(agg_func).values)
+                data.extend(data_pre.groupby(level=0, group_keys=False).apply(agg_func).values)
 
             indptr.append(len(indices))
         mat = sparse.csc_matrix((data, indices, indptr), shape=(N, M))
@@ -178,7 +186,7 @@ def _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_p
                 indices.extend(row_ids)
                 data_pre = pandas.Series(numpy.hstack(data_pre), index=ids_pre)
                 data_pre = data_pre[data_pre.index.intersection(idx)]
-                res = data_pre.groupby(level=0).agg(agg_func)  # here is the main difference from the above one
+                res = data_pre.groupby(level=0, group_keys=False).agg(agg_func)  # here is the main difference from the above one
                 for agg_f in agg_func:
                     data[agg_f].extend(res[agg_f].to_numpy())
 
@@ -208,14 +216,14 @@ def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, population="defa
     """
     h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
 
-    idx = numpy.array(gids) - 1  # From gids to sonata "node" indices (base 0 instead of base 1)
+    idx = numpy.array(gids)
     if gids_post is None:
         gids_post = gids
     if edge_property is not None:
         assert agg_func is not None, "When looking up connection properties, must provide an agg_func, such as mean"
         return _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_property, agg_func)
 
-    idx_post = numpy.array(gids_post) - 1
+    idx_post = numpy.array(gids_post)
     rv_index = pandas.Series(range(len(idx)), index=idx)
     N = len(gids)
     M = len(gids_post)
@@ -241,7 +249,7 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
     Returns a structural connection matrix, either for an entire circuit, or a subset of neurons.
     For either local connectivity or any projection. 
     Input:
-    circ (bluepy.Circuit)
+    circ (bluepysnap.Circuit)
     connectome (str): Which connectome to return. Can be either "local", returning the
                       touch connectome or the name of any projection defined in the CircuitConfig.
     for_gids: List of neuron gids to get the connectivity for.
@@ -265,7 +273,7 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
     scipy.sparse matrix of connectivity (or a dict of those if a list is passed as `agg_func`)
     """
     conn_file = find_sonata_connectome(circ, connectome)
-    N = circ.cells.count()
+    N = circ.nodes.size
     if for_gids is None:
         return full_connection_matrix(conn_file, edge_property=edge_property, agg_func=agg_func, n_neurons=N,
                                       population=population, chunk=chunk)
@@ -279,7 +287,7 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
     Returns matrices of the structural connectivity within specified groups of neurons.
     For either local connectivity or any projection. 
     Input:
-    circ (bluepy.Circuit)
+    circ (bluepysnap.Circuit)
     neuron_groups (pandas.DataFrame): Frame of neuron grouping info. 
     See conntility.circuit_models.neuron_groups for information how a group is defined.
     connectome (str, default: "local"): Which connectome to return. Can be either "local", returning the 
@@ -300,9 +308,10 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
         matrices = neuron_groups.apply(lambda grp: circuit_connection_matrix(circ, connectome=connectome,
                                                                              for_gids=grp.values, **kwargs))
     else:
-        # TODO: Assumes the full matrix is index from gid 1 to N, which it should. But what if some gids are missing?
+        # TODO: Assumes the full matrix is index from id 0 to N-1, which it should. But what if some gids are missing?
+        # Will definetly fail with multiple node populations!
         full_matrix = circuit_connection_matrix(circ, connectome=connectome, **kwargs)
-        matrices = neuron_groups.apply(lambda grp: full_matrix[numpy.ix_(grp.values - 1, grp.values - 1)])
+        matrices = neuron_groups.apply(lambda grp: full_matrix[numpy.ix_(grp.values, grp.values)])
     matrices = matrices[matrices.apply(lambda x: isinstance(x, sparse.spmatrix))]
     return matrices
 
@@ -338,7 +347,7 @@ def circuit_cross_group_matrices(circ, neuron_groups_pre, neuron_groups_post, co
 
         def prepare_indexing(df_pre):
             def index_submat(df_post):
-                return full_matrix[numpy.ix_(df_pre[column_gid].values - 1, df_post[column_gid].values - 1)]
+                return full_matrix[numpy.ix_(df_pre[column_gid].values, df_post[column_gid].values)]
             return index_submat
 
         res = neuron_groups_pre.groupby(neuron_groups_pre.index.names).apply(
@@ -374,7 +383,8 @@ def _make_node_lookup(circ, neuron_groups, column_gid, fill_unused_gids=True):
     from .neuron_groups import flip
     node_lookup = flip(neuron_groups, index=column_gid, contract_values=True, categorical=~fill_unused_gids)
     if fill_unused_gids:
-        all_gids = circ.cells.ids()
+        node_ids = circ.nodes.ids()
+        all_gids = node_ids.index.to_frame()[GID].values
         missing_gids = numpy.setdiff1d(all_gids, node_lookup.index)
         full_lookup = pandas.concat([node_lookup,
                                      pandas.Series([STR_VOID] * len(missing_gids),
@@ -400,8 +410,8 @@ def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=500
     for splt_fr, splt_to in tqdm.tqdm(zip(splits[:-1], splits[1:]), desc="Counting...", total=len(splits) - 1):
         son_idx_fr = h5['source_node_id'][splt_fr:splt_to]
         son_idx_to = h5['target_node_id'][splt_fr:splt_to]
-        reg_fr = node_lookup[son_idx_fr + 1]
-        reg_to = node_lookup[son_idx_to + 1]
+        reg_fr = node_lookup[son_idx_fr]
+        reg_to = node_lookup[son_idx_to]
         new_counts = pandas.DataFrame({"Source node": reg_fr.values,
                                        "Target node": reg_to.values}).value_counts()
         counts = counts.add(new_counts, fill_value=0)
@@ -413,12 +423,12 @@ def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=500
 
 
 def _afferent_gids(h5, post_gid):
-    rnge = h5["indices"]["target_to_source"]["node_id_to_ranges"][post_gid - 1]
+    rnge = h5["indices"]["target_to_source"]["node_id_to_ranges"][post_gid]
     if rnge[1] == rnge[0]:
         return numpy.array([])
     son_idx_fr = [h5["source_node_id"][r[0]:r[1]]
                   for r in h5["indices"]["target_to_source"]["range_to_edge_id"][rnge[0]:rnge[1]]]
-    son_idx_fr = numpy.hstack(son_idx_fr) + 1
+    son_idx_fr = numpy.hstack(son_idx_fr)
     return son_idx_fr
 
 
@@ -458,7 +468,7 @@ def circuit_matrix_between_groups(circ, neuron_groups, connectome=LOCAL_CONNECTO
     this essentially returns a voxelized connectome!
     For either local connectivity or any projection. 
     Input:
-    circ (bluepy.Circuit)
+    circ (bluepysnap.Circuit)
     neuron_groups (pandas.DataFrame): Frame of neuron grouping info. 
     See conntility.circuit_models.neuron_groups for information how a group is defined.
     connectome (str, default: "local"): Which connectome to return. Can be either "local", returning the 

@@ -18,7 +18,7 @@ def atlas_property(df_in, atlas, circ=None, column_names=None):
       - Path to atlas (nrrd-format) file to use
       - A voxcell.VoxelData object
       - A string denoting the name of the atlas to be found within the Circuit's atlas directory
-    circ (bluepy.Circuit, optional): Must be provided if the third option for specifying atlas is used.
+    circ (bluepysnap.Circuit, optional): Must be provided if the third option for specifying atlas is used.
     """
     try:
         import voxcell
@@ -35,9 +35,10 @@ def atlas_property(df_in, atlas, circ=None, column_names=None):
             atlas = voxcell.VoxelData.load_nrrd(atlas)
         else:
             assert circ is not None, "Must specify Circuit to load data from its atlas directory!"
+            from .sonata_extensions import load_atlas_data
             if column_names is None:
                 column_names = [atlas]
-            atlas = circ.atlas.load_data(atlas)
+            atlas = load_atlas_data(circ, atlas)
     else:
         assert isinstance(column_names, list) or isinstance(column_names, numpy.ndarray), "Must specify column names!"
     

@@ -17,7 +17,7 @@ def supersampled_locations_wrapper(df_in, circ=None, fm=None, orient=None, pixel
     used to translate x, y, z locations into the flat mapped volume (required for fibers).
     fm (str, optional): Path to flatmap file to use
     orient (str, optional): Path to orientation volume to use
-    circ (bluepy.Circuit, optional): Can be provided instead of fm and orient. In that case flatmap and
+    circ (bluepysnap.Circuit, optional): Can be provided instead of fm and orient. In that case flatmap and
     orientation are loaded from Circuit.atlas
     pixel_sz (float): Assumed approximate size in um of a single flatmap pixel. If set to None, an 
     approximate value will be estimated
@@ -41,12 +41,13 @@ def flat_locations(df_in, circ, fm=None):
     least three columns with x, y and z coordinates. If it also contains u, v, w columns, they may be
     used to translate x, y, z locations into the flat mapped volume (required for fibers).
     fm (str, optional): Path to flatmap file to use
-    circ (bluepy.Circuit): Can be provided instead of fm. In that case flatmap is loaded from
+    circ (bluepysnap.Circuit): Can be provided instead of fm. In that case flatmap is loaded from
     Circuit.atlas. If fm is provided, then circ can be None.
     """
     assert numpy.all([col in df_in for col in XYZ]), "Must load base x, y, z coordinates first"
     if fm is None:
-        fm = circ.atlas.load_data("flatmap")
+        from .sonata_extensions import load_atlas_data
+        fm = load_atlas_data(circ, "flatmap")
     xyz = df_in[XYZ].values
     uvw = None
     if numpy.all([x in df_in for x in UVW]):
@@ -78,7 +79,7 @@ def add_extra_properties(df_in, circ, lst_properties, fm=None):
     least three columns with x, y and z coordinates. If it also contains u, v, w columns, they may be
     used to translate x, y, z locations into the flat mapped volume (required for fibers).
     lst_properties (list-like): List of properties to add. For available properties: see above.
-    circ (bluepy.Circuit): Circuit that the neurons or fibers originate from. Must have a "orientation"
+    circ (bluepysnap.Circuit): Circuit that the neurons or fibers originate from. Must have a "orientation"
     atlas in Circuit.atlas!
     fm (str, optional): Path to flat map file to use. If not provided, then circ must have a "flatmap"
     atlas in Circuit.atlas!

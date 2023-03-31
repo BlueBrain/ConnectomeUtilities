@@ -5,7 +5,7 @@ import pandas
 import os
 
 from .extra_properties import add_extra_properties
-from .defaults import VIRTUAL_FIBERS_FN, GID, FIBER_GID, PROJECTION
+from .defaults import VIRTUAL_FIBERS_FN, GID, FIBER_GID, PROJECTION, DEFAULT_EDGES
 
 
 def load_neurons(circ, properties, base_target=None, **kwargs):
@@ -19,20 +19,18 @@ def load_neurons(circ, properties, base_target=None, **kwargs):
     depth: Approximate cortical depth of a neuron in um
 
     Input:
-    circ (bluepy.Circuit): The Circuit to load neurons from
+    circ (bluepysnap.Circuit): The Circuit to load neurons from
     properties (list-like): List with names of properties to load. Can contain anything
     that Circuit.cells.get loads, plus any of the additional properties listed above.
     base_target (str, optional): The name of the neuron target to load. If not provided
     loads all neurons.
     """
-    props_to_load = numpy.intersect1d(properties, list(circ.cells.available_properties))
-    extra_props = numpy.setdiff1d(properties, list(circ.cells.available_properties))
-    neurons = circ.cells.get(group=base_target, properties=props_to_load)
-    neurons[GID] = neurons.index
+    props_to_load = numpy.intersect1d(properties, list(circ.nodes.property_names))
+    extra_props = numpy.setdiff1d(properties, list(circ.nodes.property_names))
+    neurons = circ.nodes.get(group=base_target, properties=props_to_load)
+    neurons = neurons.reset_index()
 
     neurons = add_extra_properties(neurons, circ, extra_props, **kwargs)
-
-    neurons.index = pandas.RangeIndex(len(neurons))
     return neurons
 
 
@@ -51,16 +49,19 @@ def load_projection_locations(circ, properties, projection_name, **kwargs):
     depth: Approximate cortical depth of a neuron in um
 
     Input:
-    circ (bluepy.Circuit): The Circuit to load fibers from
+    circ (bluepysnap.Circuit): The Circuit to load fibers from
     properties (list-like): List with names of properties to load. Can contain anything
     listed above.
     projection_name (str): The name of the projection to load. Must exist in the
-    CircuitConfig file.
+    Sonata config / edges file.
     """
-    projection_fn = circ.projection(projection_name).metadata["Path"]
-    vfib_file = os.path.join(os.path.split(os.path.abspath(projection_fn))[0], VIRTUAL_FIBERS_FN)
+    from .sonata_extensions import projection_fiber_info
+
+    vfib_file = projection_fiber_info(circ, projection_name)
+    if vfib_file is None: raise RuntimeError("Cannot find virtual fiber info for the selected projection!")
     if not os.path.isfile(vfib_file):
-        raise RuntimeError("Cannot find virtual fiber info for the selected projection!")
+        raise RuntimeError("Virtual fiber info expected at {0} but not present!".format(vfib_file))
+
     vfib = pandas.read_csv(vfib_file)
 
     primary_props = vfib.columns.values
@@ -72,7 +73,7 @@ def load_projection_locations(circ, properties, projection_name, **kwargs):
     return vfib
 
 
-def load_all_projection_locations(circ, properties, proj_names=None, **kwargs):
+def load_all_projection_locations(circ, properties, proj_names=None, include_extention=True, **kwargs):
     """
     Loads anatomical information about projection fibers innervating a Circuit.
     Provides access to the following properties:
@@ -91,12 +92,15 @@ def load_all_projection_locations(circ, properties, proj_names=None, **kwargs):
     projections is returned.
 
     Input:
-    circ (bluepy.Circuit): The Circuit to load fibers from
+    circ (bluepysnap.Circuit): The Circuit to load fibers from
     properties (list-like): List with names of properties to load. Can contain anything
     listed above.
     """
     if proj_names is None:
-        proj_names = list(circ.config.get('projections', {}).keys())
+        proj_names = [_x for _x in circ.edges.keys() if _x != DEFAULT_EDGES]
+        if include_extention:
+            from .sonata_extensions import projection_list
+            proj_names = proj_names + projection_list(circ)
     projs = pandas.concat([
         load_projection_locations(circ, properties, proj, **kwargs)
         for proj in proj_names
