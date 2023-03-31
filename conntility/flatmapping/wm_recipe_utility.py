@@ -52,17 +52,18 @@ def twod2mapping_coords(flat_coords, x, y):
 def atlas_of_mapping_coordinates(recipe, circ=None, fm=None, orient=None, hier=None, ann=None,
                                  supersample=False):
     import voxcell
+    from ..circuit_models.neuron_groups.sonata_extensions import load_atlas_data, load_atlas_hierarchy
 
     if fm is None or orient is None or hier is None or ann is None:
         assert circ is not None, "Must provide all of fm, orient, hier and ann or a Circuit!"
         if fm is None:
-            fm = circ.atlas.load_data("flatmap")
+            fm = load_atlas_data(circ, "flatmap")
         if orient is None:
-            orient = circ.atlas.load_data("orientation")
+            orient = load_atlas_data(circ, "orientation")
         if hier is None:
-            hier = circ.atlas.load_region_map()
+            hier = load_atlas_hierarchy(circ)
         if ann is None:
-            ann = circ.atlas.load_data("brain_regions")
+            ann = load_atlas_data(circ, "brain_regions")
     elif circ is not None:
         print("Provided Circuit will be ignored since all of fm, orient, hier and ann were provided")
     

@@ -399,8 +399,8 @@ class ConnectivityMatrix(object):
     @classmethod
     def from_bluepy(cls, bluepy_obj, load_config=None, gids=None, connectome=LOCAL_CONNECTOME, **kwargs):
         """
-        BlueConfig/CircuitConfig based constructor
-        :param bluepy_obj: bluepy Simulation or Circuit object
+        Sonata config based constructor
+        :param bluepy_obj: bluepysnap Simulation or Circuit object
         :param load_config: config dict for loading and filtering neurons from the circuit
         :param gids: array of gids AKA. the nodes of the graph, if not None: the intersection of these gids
                      and the ones loaded based on the `load_config` will be used

@@ -13,6 +13,7 @@ def input_spikes(sim):
     spikes, pandas.Series of input spike ids. Formatted the same as Simulation.spikes
     (i.e. the output spikes).
     """
+    # TODO: UPDATE FOR SONATA!
     def read_csv(path):
         data = pandas.read_csv(path, delim_whitespace=True)["/scatter"]
         data.name = "gid"
@@ -95,6 +96,7 @@ def input_innervation(sim, base_target=None, proj_names=None, neuron_properties=
        "t_win": Time window of innervation.
     nrn: DataFrame of the specified neuron anatomical properties
     """
+    # TODO: UPDATE FOR SONATA!
     from .neuron_groups import load_neurons, load_all_projection_locations
     from .connection_matrix import circuit_cross_group_matrices
     from .neuron_groups.defaults import GID, FIBER_GID
@@ -110,7 +112,7 @@ def input_innervation(sim, base_target=None, proj_names=None, neuron_properties=
     nrn = nrn.set_index(nrn.index.droplevel(-1))
 
     projections = load_all_projection_locations(circ, [], proj_names=proj_names)
-    projections[GID] = projections[FIBER_GID]
+    projections[GID] = projections[FIBER_GID]  # TODO: ASSUMES OFFSET FOR FIBER GIDS!
     proj_gids = projections.groupby("projection").apply(lambda x: x[GID].values)
 
     M = circuit_cross_group_matrices(circ, projections, nrn, connectome=None).stack()

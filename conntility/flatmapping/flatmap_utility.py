@@ -51,9 +51,9 @@ def flat_coordinates_of_regions(names_regions, fm, *args, make_unique=False, sub
         return _flat_coordinates_of_regions(names_regions, fm, *args, make_unique=make_unique, subsample=subsample)
     elif len(args) == 1:
         circ = args[0]
-        atlas = circ.atlas
-        hier = atlas.load_region_map()
-        ann = atlas.load_data("brain_regions")
+        from ..circuit_models.neuron_groups.sonata_extensions import load_atlas_data, load_atlas_hierarchy
+        ann = load_atlas_data(circ, "brain_regions")
+        hier = load_atlas_hierarchy(circ)
         return _flat_coordinates_of_regions(names_regions, fm, hier, ann, make_unique=make_unique, subsample=subsample)
     else:
         raise ValueError()

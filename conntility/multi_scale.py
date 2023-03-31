@@ -216,7 +216,7 @@ class MultiScaleConnectome(object):
         circ = self._props["circuit"]
         gids = self._props["neurons"][GID]
         if force_full_matrix:
-            assert len(gids) == circ.cells.count()
+            assert len(gids) == circ.nodes.size
 
         if not isinstance(matrix_kwargs, list):
             matrix_kwargs = [matrix_kwargs]

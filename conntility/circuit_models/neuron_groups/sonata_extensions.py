@@ -5,6 +5,7 @@ from .defaults import VIRTUAL_FIBERS_FN
 SONATA_CONNECTOME_FN = "edges.sonata"
 STR_ATLAS_DIR = "atlas_dir"
 ATLAS_LOC = "atlas"
+HIERARCHY_FN = "hierarchy.json"
 PROJECTION_LOC = "projections"
 STR_NODE_SETS = "node_sets_file"
 
@@ -39,6 +40,14 @@ def load_atlas_data(circ, atlas_name):
         atlas_fn = atlas_fn + ".nrrd"
     
     return voxcell.VoxelData.load_nrrd(atlas_fn)
+
+def load_atlas_hierarchy(circ):
+    import voxcell
+
+    atlas = atlas_dir(circ)
+    if atlas is None: raise RuntimeError("No atlas directory found!")
+    hier_fn = os.path.join(atlas, HIERARCHY_FN)
+    return voxcell.RegionMap.load_json(hier_fn)
 
 def projection_dir(circ):
     circ_base = circuit_base_dir(circ)
