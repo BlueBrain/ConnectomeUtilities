@@ -573,7 +573,7 @@ class ConnectivityMatrix(object):
                                     normalize="mean"):
         spks = spks.loc[np.isin(spks, self.vertices[GID])]
         t_wins = np.array(t_wins).reshape((-1, 2))
-        assert normalize in ["mean", "sum", "pre"], "Unknown normalization: {0}".format(normalize)
+        assert normalize in ["mean", "sum", "pre", "expected_simple", "expected_strong"], "Unknown normalization: {0}".format(normalize)
 
         def empty(arg_in):
             for _x in arg_in: yield(_x)
@@ -595,6 +595,14 @@ class ConnectivityMatrix(object):
             elif normalize == "pre":
                 den = np.isin(eavp["row"], spks_row).sum()
                 p.append(v.sum() / den)
+            elif normalize == "expected_simple":
+                p1 = float(len(spks_row)) / self._shape[0]
+                p2 = float(len(spks_col)) / self._shape[1]
+                p.append(v.mean() / (p1 * p2))
+            elif normalize == "expected_strong":
+                den = np.isin(eavp["row"], spks_row).mean()
+                dem = np.isin(eavp["col"], spks_col).mean()
+                p.append(v.mean() / (den * dem))
         return np.array(p)
 
     def random_n_gids(self, ref):
