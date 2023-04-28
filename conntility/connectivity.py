@@ -392,7 +392,7 @@ class ConnectivityMatrix(object):
 
     @staticmethod
     def __extract_vertex_ids__(an_obj):
-        if hasattr(an_obj, GID):
+        if hasattr(an_obj, GID):  # TODO: "gid" vs "gids" mismatch?
             return getattr(an_obj, GID)
         return an_obj
 
