@@ -2,7 +2,9 @@
 
 ## What is Connectome Utilities and what does it provide?
 
-The purpose of Connectome Utilities is to simplify running topological analyses on detailed models of networks by providing a bridge between existing analyses and the model representation. The purpose is not to provide the analyses themselves, there are great existing packages and solutions for that. But to simplify their application to the case of complex, non-homogeneous networks associated with interdependent node and edge properties. For illustration, we will provide some examples from the field of biologically detailed models of neural circuits, although the methods themselves could be useful in different fields.
+The purpose of Connectome Utilities is to simplify running topological analyses on detailed models of networks by providing a bridge between existing analyses and the model representation. The purpose is not to provide the analyses themselves, there are great existing packages and solutions for that. But to simplify their application to the case of complex, non-homogeneous networks associated with interdependent node and edge properties. This comes in the form of two types of functionality: First, loading complex connectomes into a reduced representation that still keeps salient details. Second, automate standard operations, such as extraction of specific subnetworks and generation of statistical controls.
+
+For illustration, we will provide some examples from the field of biologically detailed models of neural circuits, although the methods themselves could be useful in different fields and for more simplified neuronal networks as well.
 
 - [Example 1](examples/Examples%201%20and%202%20-%20Analyzing%20pathways%20and%20controls.ipynb): The network of a circuit model is to be analyzed, but the user wants to analyze the various neuron types separately, as it is known that their connectivities are very different. Connectome Utilities provides the automatic application of the same analysis to separate pathways and comparison of the results.
 
@@ -18,7 +20,11 @@ The purpose of Connectome Utilities is to simplify running topological analyses 
 
 In summary, when networks are more complex than just nodes and unweighted edges, more confounders have to be considered, and certain decisions have to be made during analysis. We provide the package that makes these decisions explicit and provides a sane default for them. Additionally, the package defines and uses a configuration file format formalizing analyses that combine any or all the complexities outlined above into a json file. This facilitates the reproduction of idendical analyses in different networks.
 
-Furthermore, the package also provides an input layer that loads neuronal networks represented in the open Sonata format. But it also provides an internal serialization standard that provides a more compact representation, albeit with reduced detail. As such, it can be used independently of Sonata.
+The above is centered around a "ConnectivityMatrix" class and various derived classes, that provide a powerful and detailed representation of a complex network. It also provides save and load operations, enabling efficient data sharing. Some additional, independent functionality is provided:
+
+- Functionality to extract the representation of topographical mapping of cortical connectivity, as parameterized in the [BBP "White Matter" project](github.com/BlueBrain/Long-range-micro-connectome).
+- Functionality to represent connectivity at multiple spatial scales simultaneously.
+- Functionality to rapidly calculate path distances between synapses on a neuronal morphology in a Sonata model.
 
 
 
