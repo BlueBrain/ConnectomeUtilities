@@ -939,8 +939,15 @@ class ConnectivityMatrix(object):
         return np.array(p)
 
     def random_n_gids(self, ref):
-        """Randomly samples `ref` number of neurons if `ref` is and int,
-        otherwise the same number of neurons as in `ref`"""
+        """
+        Generate node identifiers for a random subpopulation of specified size.
+
+        Args:
+          ref: Determines the size of the random subsample. Can be an int or an object with length attribute.
+          
+        Returns:
+          A numpy.array containing node identifiers of nodes in this network of specified size.  
+        """
         all_gids = self._vertex_properties.index.values
         if hasattr(ref, "__len__"):
             assert np.isin(self.__extract_vertex_ids__(ref),
@@ -953,9 +960,28 @@ class ConnectivityMatrix(object):
         return np.random.choice(all_gids, n_samples, replace=False)
 
     def random_n(self, ref):
+        """
+        Generate a random subpopulation of specified size.
+
+        Args:
+          ref: Determines the size of the random subsample. Can be an int or an object with length attribute.
+          
+        Returns:
+          A ConnectivityMatrix representing a subnetwork of the specified number of nodes and all edges between them.  
+        """
         return self.subpopulation(self.random_n_gids(ref))
     
     def analyze(self, analysis_recipe):
+        """
+        Analyze this ConnectivityMatrix according to an analysis recipe.
+
+        Args:
+          analysis_recipe: A dict, or the path to a .json file containing a dict. For the format, see 
+          configuration_files.md
+        
+        Returns:
+          See configuration_files.md
+        """
         from .analysis import get_analyses
         analyses = get_analyses(analysis_recipe)
         res = {}
@@ -964,6 +990,16 @@ class ConnectivityMatrix(object):
         return res
     
     def partition(self, by_columns):
+        """
+        Split this network into subnetworks according to the values of a node property.
+
+        Args:
+          by_columns: A list of strings of node properties. All values must be in obj.vertex_properties.
+
+        Returns:
+          A ConnectivityGroup defining a partition of this network, where each group contains the nodes associated
+          with a unique combination of values of the specified properties.
+        """
         if isinstance(by_columns, str): return self.partition([by_columns])
         str_idx = self._vertex_properties.index.name or "index"
         grp = self.vertices.groupby(by_columns).apply(lambda x: self.subpopulation(x[str_idx]))
@@ -972,6 +1008,21 @@ class ConnectivityMatrix(object):
         return ConnectivityGroup(grp)
     
     def condense(self, by_columns, str_original="_idxx_in_original"):
+        """
+        Generate quotient matrices, i.e. connectivity at "reduced resolution".
+
+        Args:
+          by_columns: A list of strings of node properties. All values must be in obj.vertex_properties.
+
+          str_original: A string specifying the name of a node property to be used in the returned ConnectivityMatrix.
+
+        Returns:
+          A ConnectivityMatrix of the number of connections between groups of nodes defined by the specified list
+          of node properties. Each group contains nodes associated with a unique combination of values of the properties.
+          The nodes of the return ConnectivityMatrix will be associated with a property of the specified name. The values
+          of the property are lists of indices of the contained nodes in the original ConnectivityMatrix.
+        """
+        # TODO: Sum of values instead number of edges?
         if isinstance(by_columns, str): return self.condense([by_columns], str_original=str_original)
         orig_vtx = self.vertices
         orig_vtx[str_original] = range(len(orig_vtx))
@@ -1002,6 +1053,9 @@ class ConnectivityMatrix(object):
         return MC
     
     def core_decomposition(self, str_core_label="_core_decomposition"):
+        """
+        Partition this network according its core decomposition, as defined in sknetwork.
+        """
         from sknetwork.topology import CoreDecomposition
         from sknetwork.utils import directed2undirected
 
@@ -1028,6 +1082,25 @@ class ConnectivityMatrix(object):
         return modularity(self.matrix.tocsr(), labels.values, resolution=resolution_param)
     
     def modularity(self, with_respect_to, resolution_param=None, implementation="sknetwork"):
+        """
+        Calculate the modularity of this network according to a given partition of its nodes.
+
+        Args:
+          with_respect_to: A list of strings of node properties that define the partition to use. 
+          All values must be in obj.vertex_properties. A group of the partition is defined by a unique
+          combination of values of the specified properties.
+
+          resolution_param (float): The resolution parameter. See sknetwork.clustering.get_modularity for details.
+
+          implementation (str): Which implementation of modularit to use. Default is "sknetwork", which will
+          use sknetwork.clustering.get_modularity. Any other value will use a custom implementation that is
+          part of this package.
+        
+        Returns:
+          If implementation is not "sknetwork", returns a pandas.Series of the contributions to modularity of
+          each subnetwork. The actual modularity is the sum of this. If "sknetwork", then only a single value is 
+          returned.
+        """
         if implementation == "sknetwork": return self.__modularity_sknetwork__(with_respect_to, resolution_param)
         if isinstance(with_respect_to, str): return self.modularity([with_respect_to], resolution_param=resolution_param,
                                                                     implementation=implementation)
@@ -1064,6 +1137,17 @@ class ConnectivityMatrix(object):
 
     @classmethod
     def from_h5(cls, fn, group_name=None, prefix=None):
+        """
+        Load a ConnectivityMatrix from a propriatory formatted hdf5 file.
+
+        Args:
+          fn: Path to the hdf5 file the data is stored in
+          group_name (default: full_matrix): Name of the group used within the file
+          prefix (default: connectivity): A prefix within the hdf5 file under which the group is found.
+
+        Returns:
+          Loaded ConnectivityMatrix.
+        """
         if prefix is None:
             prefix = "connectivity"
         if group_name is None:
@@ -1081,6 +1165,15 @@ class ConnectivityMatrix(object):
                    default_edge_property=def_edge, shape=shape)
 
     def to_h5(self, fn, group_name=None, prefix=None):
+        """
+        Save a ConnectivityMatrix into a propriatory formatted hdf5 file.
+
+        Args:
+          fn: Path to the hdf5 file to store the data in
+          group_name (default: full_matrix): Name of the group within the file to use to store the data
+          prefix (default: connectivity): A prefix within the hdf5 file under which the group will be created.
+
+        """
         if prefix is None:
             prefix = "connectivity"
         if group_name is None:
@@ -1111,6 +1204,10 @@ def _update_load_config(load_cfg, sim_tgt):
 
 
 class StructurallyPlasticMatrix(ConnectivityMatrix):
+    """
+    A version of ConnectivityMatrix for connectivity that changes over time structurally, i.e.
+    the presence and absence of edges may change.
+    """
     def __init__(self, *args, vertex_labels=None, vertex_properties=None,
                  edge_properties=None, default_edge_property="data", shape=None,
                  edge_off={}, edge_on={}, check_consistency=True):
@@ -1156,6 +1253,19 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
         return self.subedges(idxx.index[idxx["t"]].values)
     
     def delta(self, idx_fr, idx_to):
+        """
+        Return the net changes occuring between two time steps.
+
+        Args:
+          idx_fr (int): Index of the step from where changes are to be considered.
+          idx_to (int): Index of the step up to which changes are to be considered.
+
+        Returns:
+          A ConnectivityMatrix encoding the changes occuring between the time steps. That is, if an edge
+          is lost between the time steps, then the corresponding entry will be -1, if an edge if gained 
+          it will be 1, otherwise 0. 
+          obj.delta(n, n) is always all zeros.
+        """
         mxx = self._off.index.max() + 1
         is_off = self._off.get(np.arange(idx_fr + 1, idx_to + 1), self._off.iloc[:0]).reset_index().groupby("edge")
         is_on = self._on.get(np.arange(idx_fr + 1, idx_to + 1), self._on.iloc[:0]).reset_index().groupby("edge")
@@ -1175,6 +1285,17 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
         return ret.default("delta", copy=False)
     
     def skip(self, step, copy=True):
+        """
+        A version of this Matrix where the change occuring in a single time step is ignored.
+
+        Args:
+          step: Index of the time step to ignore.
+
+          copy (boolean, default True): If True, returns a copy. Else this object is modified. 
+        
+        Returns:
+          A StructurallyPlasticMatrix where the specified change is skipped (ignored).
+        """
         new_off = self._off.drop(step)
         new_on = self._on.drop(step)
         if copy:
@@ -1187,6 +1308,18 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
         return self.fix_consistency(copy=False)
     
     def count_changes(self, count_off=True, count_on=True):
+        """
+        Counts how often all edges are changing, i.e. lost or gained over all time steps.
+
+        Args:
+          count_off (boolean, default: True): If true, count changes where the edge is lost
+
+          count_on(boolean, default: True): If true, count changes where the edge is gained
+
+        Returns:
+          A ConnectivityMatrix where each edge of this network is associated with the number
+          of times it is gained / lost.
+        """
         counts = pd.DataFrame({"count": np.zeros(len(self._edge_indices), dtype=int)})
         if count_off:
             to_add = self._off.reset_index().groupby("edge").agg(len)
@@ -1199,6 +1332,13 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
                                   edge_properties=counts, default_edge_property="count")
     
     def amount_active(self):
+        """
+        Count the number of time steps each edge is active in
+
+        Returns:
+          A ConnectivityMatrix where each edge of this network is associated with the number of
+          time steps it is active in.
+        """
         mxx = np.maximum(self._off.index.max(), self._on.index.max()) + 1
         counts = pd.DataFrame({"count": mxx * np.ones(len(self._edge_indices), dtype=int),
                                "data": np.ones(len(self._edge_indices), dtype=bool)})
@@ -1262,6 +1402,9 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
     @classmethod
     def from_matrix_stack(cls, mats, vertex_labels=None, vertex_properties=None,
                           default_edge_property="data"):
+        """
+        Construct a StructurallyPlasticMatrix from a list of sparse matrices.
+        """
         assert len(mats) > 0
         ms = [sparse.coo_matrix(_m) for _m in mats]
         assert np.all([_m.shape == ms[0].shape for _m in ms])
