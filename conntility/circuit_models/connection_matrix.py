@@ -383,13 +383,13 @@ def _make_node_lookup(circ, neuron_groups, column_gid, fill_unused_gids=True):
     return node_lookup
 
 
-def connection_matrix_between_groups_partition(sonata_fn, node_lookup, chunk=50000000):
+def connection_matrix_between_groups_partition(sonata_fn, node_lookup, population="default", chunk=50000000):
     # TODO: If the user accidently provides a "neuron_groups" instead of "node_lookup" input give helpful message
     # TODO: Evaluate if it is necessary to fill node_lookup for unused gids with STR_VOID
     """
     Don't use this. Use circuit_matrix_between_groups
     """
-    h5 = h5py.File(sonata_fn, "r")['edges/default']  # TODO: close file!
+    h5 = h5py.File(sonata_fn, "r")['edges/{0}'.format(population)]  # TODO: close file!
 
     dset_sz = h5['source_node_id'].shape[0]
     splits = numpy.arange(0, dset_sz + chunk, chunk)
@@ -422,7 +422,7 @@ def _afferent_gids(h5, post_gid):
     return son_idx_fr
 
 
-def connection_matrix_between_groups_partial(sonata_fn, node_lookup, **kwargs):
+def connection_matrix_between_groups_partial(sonata_fn, node_lookup, population="default", **kwargs):
     # TODO: If the user accidently provides a "neuron_groups" instead of "node_lookup" input give helpful message
     """
     Don't use this. Use circuit_matrix_between_groups
@@ -433,7 +433,7 @@ def connection_matrix_between_groups_partial(sonata_fn, node_lookup, **kwargs):
     lst_node_to = []
     lst_counts_from = []
     with h5py.File(sonata_fn, "r") as h5_file:
-        h5 = h5_file['edges/default']
+        h5 = h5_file['edges/{0}'.format(population)]
         for node_to, lst_post_gids in tqdm.tqdm(gids_per_node.items(), total=len(gids_per_node)):
             lst_pre_gids = [_afferent_gids(h5, post_gid) for post_gid in lst_post_gids]
             lst_pre_gids = numpy.hstack(lst_pre_gids)
@@ -449,7 +449,7 @@ def connection_matrix_between_groups_partial(sonata_fn, node_lookup, **kwargs):
 
 
 def circuit_matrix_between_groups(circ, neuron_groups, connectome=LOCAL_CONNECTOME,
-                                  extract_full=False, column_gid=GID):
+                                  population="default", extract_full=False, column_gid=GID):
     """
     Returns the number of structural connections between (and within) specified groups of neurons.
     That is, single matrix of the _number_ of connections between group A and B.  
@@ -482,7 +482,7 @@ def circuit_matrix_between_groups(circ, neuron_groups, connectome=LOCAL_CONNECTO
 
     if extract_full:
         node_lookup = _make_node_lookup(circ, neuron_groups, column_gid)
-        return connection_matrix_between_groups_partition(conn_file, node_lookup)
+        return connection_matrix_between_groups_partition(conn_file, node_lookup, population=population)
     else:
         node_lookup = _make_node_lookup(circ, neuron_groups, column_gid, fill_unused_gids=False)
-        return connection_matrix_between_groups_partial(conn_file, node_lookup)
+        return connection_matrix_between_groups_partial(conn_file, node_lookup, population=population)
