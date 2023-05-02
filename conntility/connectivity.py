@@ -16,6 +16,10 @@ _MAT_GLOBAL_INDEX = 0
 
 
 class _MatrixNodeIndexer(object):
+    """
+    A helper class used to sample sub-networks of a ConnectivityMatrix.
+    Instantiate using ConnectivityMatrix.index.
+    """
     def __init__(self, parent, prop_name):
         self._parent = parent
         self._prop = parent._vertex_properties[prop_name]
@@ -25,30 +29,53 @@ class _MatrixNodeIndexer(object):
             self.random = self.random_categorical
 
     def eq(self, other):
+        """
+        Return subnetwork where the value of the indexed property is equal to the provided reference.
+        """
         pop = self._parent._vertex_properties.index.values[self._prop == other]
         return self._parent.subpopulation(pop)
 
     def isin(self, other):
+        """
+        Return subnetwork where the value of the indexed property is within the list provided as reference.
+        """
         pop = self._parent._vertex_properties.index.values[np.in1d(self._prop, other)]
         return self._parent.subpopulation(pop)
 
     def le(self, other):
+        """
+        Return subnetwork where the value of the indexed property is less or equal to the provided reference.
+        """
         pop = self._parent._vertex_properties.index.values[self._prop <= other]
         return self._parent.subpopulation(pop)
 
     def lt(self, other):
+        """
+        Return subnetwork where the value of the indexed property is less than the provided reference.
+        """
         pop = self._parent._vertex_properties.index.values[self._prop < other]
         return self._parent.subpopulation(pop)
 
     def ge(self, other):
+        """
+        Return subnetwork where the value of the indexed property is greater or equal to the provided reference.
+        """
         pop = self._parent._vertex_properties.index.values[self._prop >= other]
         return self._parent.subpopulation(pop)
 
     def gt(self, other):
+        """
+        Return subnetwork where the value of the indexed property is greater than the provided reference.
+        """
         pop = self._parent._vertex_properties.index.values[self._prop > other]
         return self._parent.subpopulation(pop)
 
     def random_numerical_gids(self, ref, n_bins=50):
+        """
+        Return a random subnetwork where the value of the indexed property matches the subnetwork provided as
+        reference. For numerical properties. Values will be binned before matching.
+        Returns the gids of the random sample.
+        """
         all_gids = self._prop.index.values
         ref_gids = self._parent.__extract_vertex_ids__(ref)
         assert np.isin(ref_gids, all_gids).all(), "Reference gids are not part of the connectivity matrix"
@@ -66,9 +93,19 @@ class _MatrixNodeIndexer(object):
         return sample_gids
 
     def random_numerical(self, ref, n_bins=50):
+        """
+        Return a random subnetwork where the value of the indexed property matches the subnetwork provided as
+        reference. For numerical properties. Values will be binned before matching.
+        Returns a ConnectivityMatrix to represent the random sample.
+        """
         return self._parent.subpopulation(self.random_numerical_gids(ref, n_bins))
 
     def random_categorical_gids(self, ref):
+        """
+        Return a random subnetwork where the value of the indexed property matches the subnetwork provided as
+        reference. For categorical properties. 
+        Returns the gids of the random sample.
+        """
         all_gids = self._prop.index.values
         ref_gids = self._parent.__extract_vertex_ids__(ref)
         assert np.isin(ref_gids, all_gids).all(), "Reference gids are not part of the connectivity matrix"
@@ -83,43 +120,97 @@ class _MatrixNodeIndexer(object):
         return sample_gids
 
     def random_categorical(self, ref):
+        """
+        Return a random subnetwork where the value of the indexed property matches the subnetwork provided as
+        reference. For categorical properties.
+        Returns a ConnectivityMatrix to represent the random sample.
+        """
         return self._parent.subpopulation(self.random_categorical_gids(ref))
 
 
 class _MatrixEdgeIndexer(object):
+    """
+    A helper class used to sample filtered versions of a network, i.e. same set of nodes, but a subset of edges.
+    Instantiate using ConnectivityMatrix.filter.
+    """
     def __init__(self, parent, prop_name):
         self._parent = parent
         self._prop = parent.edges[prop_name].values
 
     def eq(self, other):
+        """
+        Return network with edges where the value of the indexed property is equal to the provided reference.
+        """
         idxx = self._prop == other
         return self._parent.subedges(idxx)
 
     def isin(self, other):
+        """
+        Return network with edges where the value of the indexed property is within the list provided as reference.
+        """
         idxx = np.isin(self._prop, other)
         return self._parent.subedges(idxx)
 
     def le(self, other):
+        """
+        Return network with edges where the value of the indexed property is less or equal to the provided reference.
+        """
         idxx = self._prop <= other
         return self._parent.subedges(idxx)
 
     def lt(self, other):
+        """
+        Return network with edges where the value of the indexed property is less than the provided reference.
+        """
         idxx = self._prop < other
         return self._parent.subedges(idxx)
 
     def ge(self, other):
+        """
+        Return network with edges where the value of the indexed property is greater or equal to the provided reference.
+        """
         idxx = self._prop >= other
         return self._parent.subedges(idxx)
 
     def gt(self, other):
+        """
+        Return network with edges where the value of the indexed property is greater than the provided reference.
+        """
         idxx = self._prop > other
         return self._parent.subedges(idxx)
 
     def full_sweep(self, direction='decreasing'):
+        """
+        Return ConnectivityGroup representing a filtration with successively decreasing or increasing threshold values for
+        the indexed property.
+        """
         #  For an actual filtration. Take all values and sweep
         raise NotImplementedError()
     
     def random_by_vertex_property_ids(self, ref, prop_name, n_bins=None, is_edges=False):
+        """
+        Return a random subnetwork with the same nodes but only a subset of the edges. The subset is randomly generated 
+        based on a reference. 
+        The returned subnetwork will match the reference in terms of the distributions of the specified node property for
+        source and target nodes of edges.
+
+        Args:
+          ref: A reference to match. Must represent a sub-network of the base network that contains either all nodes and
+          a subset of edges, or a subset of nodes and all edges between them.
+          In the first case, it is a list of edge ids (indices of ConnectivityMatrix._edges).
+          In the second case it is either a ConnectivityMatrix object or a list of the "gid" node property of the base 
+          network.
+
+          prop_name: Must be a node property (ConnectivityMatrix.vertex_properties) to match the distribution of.
+
+          n_bins: If provided, the node property will be binned as specified. Node property must then be numerical.
+
+          is_edges: If set to True, the reference will be interpreted as edge ids. Otherwise, its nature will be tried
+          to be inferred.
+
+        Returns:
+          A list of edge ids representing the random subnetwork.
+        """
         if isinstance(ref, ConnectivityMatrix):
             assert np.all(np.in1d(ref.gids, self._parent.gids))
         else:
@@ -151,17 +242,40 @@ class _MatrixEdgeIndexer(object):
         return out_edges
     
     def random_by_vertex_property(self, ref, prop_name, n_bins=None):
+        """
+        Generates a random subnetwork containing all nodes and a subset of edges. Based on matching
+        the distribution of properties of source and target nodes to a reference subnetwork.
+        For details, see .random_by_vertex_property_ids
+
+        Returns:
+          A ConnectivityMatrix object representing the subnetwork.
+        """
         edge_ids = self.random_by_vertex_property_ids(ref, prop_name, n_bins=n_bins)
         return self._parent.subedges(edge_ids)
 
 
 class _MatrixNeighborhoodIndexer(object):
+    """
+    A helper class used to generate subnetworks of neighborhoods of nodes, i.e. containing a specified node
+    and all nodes connected to it.
+    """
 
     def __init__(self, parent):
         self._parent = parent
         self._prop = parent._lookup
     
     def get_single(self, pre=None, post=None, center_first=True):
+        """
+        Get the neighborhood of a single node.
+
+        Args:
+          pre: The id of a node in the network. The subnetwork returned will contain that node and all its 
+          targets.
+          post: The id of a node in the network: The subnetwork returned will contain that node and all its
+          sources.
+          center_first (optional, default: True): If True, the arguments of "pre" and/or "post" will be 
+          listed first in the returned subnetwork. Otherwise, the ordering of the base network is preserved.
+        """
         if pre is None and post is None: raise ValueError("Insufficient number of arguments!")
 
         indexer = self._parent._edge_indices.reset_index()
@@ -182,6 +296,13 @@ class _MatrixNeighborhoodIndexer(object):
         return self._parent.subpopulation(pop_ids)
         
     def get(self, *args, pre=None, post=None, center_first=True):
+        """
+        Get the neighborhood of a single or multiple nodes.
+        A single non-keyword argument can be provided. If this is done, its value will be used for both 
+        the pre= and post= keyword arguments.
+
+        For an explanation of the keyword arguments, see .get_single.
+        """
         if len(args) > 1:
             raise ValueError("Please provide a single vertex identifier or use the kwargs!")
         if len(args) == 1:
@@ -272,14 +393,33 @@ class ConnectivityMatrix(object):
         self.neighborhood = _MatrixNeighborhoodIndexer(self)
 
     def __len__(self):
+        """
+        Length of a ConnectivityMatrix is the number of nodes
+        """
         return len(self.gids)
 
     def add_vertex_property(self, new_label, new_values):
+        """
+        Assign values for a new property to all nodes. Must be a non-existing property.
+
+        Args:
+          new_label (str): Name of the new property. No property with this name may already exist.
+          new_values (iterable): Values for the new property. Must have same length as this object.
+          If provided as a DataFrame, must have the same index as obj._vertex_properties
+        """
         assert len(new_values) == len(self), "New values size mismatch"
         assert new_label not in self._vertex_properties, "Property {0} already exists!".format(new_label)
         self._vertex_properties[new_label] = new_values
     
     def add_edge_property(self, new_label, new_values):
+        """
+        Assign values for a new property to all edges. Must be a non-existing property.
+
+        Args:
+          new_label (str): Name of the new property. No property with this name may already exist.
+          new_values (iterable): Values for the new property. Must have length equal to the number of
+          edges in this network.
+        """
         if (isinstance(new_values, np.ndarray) and new_values.ndim == 2) or isinstance(new_values, sparse.spmatrix):
             if isinstance(new_values, sparse.spmatrix):
                 new_values = new_values.tocoo()
@@ -316,29 +456,57 @@ class ConnectivityMatrix(object):
         return pd.Series(np.arange(self._shape[0]), index=self._vertex_properties.index)
 
     def matrix_(self, edge_property=None):
+        """
+        Representation of the network as a sparse.coo_matrix.
+        Args:
+          edge_property (optional): Name of the edge property the values of which to return. If not
+          provided, the registered default property is used. (See obj.default())
+        """
         if edge_property is None:
             edge_property = self._default_edge
         return sparse.coo_matrix((self.edges[edge_property], (self._edge_indices["row"], self._edge_indices["col"])),
                                  shape=self._shape, copy=False)
     @property
     def edges(self):
+        """
+        The list of edges as a DataFrame.
+        """
         return self._edges
     
     @property
     def vertices(self):
+        """
+        The list of nodes contained in this network, along with all their properties.
+        """
         return self._vertex_properties.reset_index()
 
     @property
     def edge_properties(self):
+        """
+        The names of all available edge properties. Properties can be used with obj.default(prop), obj.matrix_(prop)
+        and obj.filter(prop)
+        """
         # TODO: Maybe add 'row' and 'col'?
         return self.edges.columns.values
 
     @property
     def vertex_properties(self):
+        """
+        The names of all available node properties. Properties can be used with obj.index(prop)
+        """
         # TODO: Think about adding GID here as well?
         return self._vertex_properties.columns.values
     
     def edge_associated_vertex_properties(self, prop_name):
+        """
+        The list of values of the specified node property associated with all edges. That is, for each edge
+        the value of the property is returned for the source and target nodes. 
+        Args:
+          prop_name: Name of the property to gather. Must be in obj.vertex_properties.
+
+        Returns:
+          pandas.DataFrame with the values of the property for source and target node in the columns.
+        """
         assert (prop_name in self.vertex_properties) or (prop_name == GID), "{0} is not a vertex property: {1}".format(prop_name, self.vertex_properties)
         eavp = pd.concat(
             [self.vertices[prop_name][self._edge_indices[_idx]].rename(_idx).reset_index(drop=True)
@@ -348,6 +516,13 @@ class ConnectivityMatrix(object):
         return eavp
     
     def matrix_(self, edge_property=None):
+        """
+        Representation of the network as a sparse.coo_matrix.
+        Args:
+          edge_property (optional): Name of the edge property the values of which to return. If not
+          provided, the registered default property is used. (See obj.default())
+        """
+        # TODO: Duplicate?
         if edge_property is None:
             edge_property = self._default_edge
         return sparse.coo_matrix((self.edges[edge_property], (self._edge_indices["row"], self._edge_indices["col"])),
@@ -355,32 +530,84 @@ class ConnectivityMatrix(object):
 
     @property
     def matrix(self):
+        """
+        Representation of the network as a sparse.coo_matrix. Values associated with each edge are the values of the
+        default edge property. See obj.default(prop).
+        """
         return self.matrix_(self._default_edge)
 
     def dense_matrix_(self, edge_property=None):
+        """
+        Representation of the network as a numpy.matrix. For details, see obj.matrix_()
+        """
         return self.matrix_(edge_property=edge_property).todense()
 
     @property
     def dense_matrix(self):
+        """
+        Representation of the network as a numpy.matrix. Values associated with each entry are the values of the
+        default edge property if an edge exists between the pair, otherwise 0. See obj.default(prop).
+        """
         return self.dense_matrix_()
 
     def array_(self, edge_property=None):
+        """
+        Representation of the network as a numpy.array. For details, see obj.matrix_()
+        """
         return np.array(self.dense_matrix_(edge_property=edge_property))
 
     @property
     def array(self):
+        """
+        Representation of the network as a numpy.array. Values associated with each entry are the values of the
+        default edge property if an edge exists between the pair, otherwise 0. See obj.default(prop).
+        """
         return self.array_()
 
     def index(self, prop_name):
+        """
+        Returns an object for the generation of subnetworks based on values of the specified node property.
+        For details, see _MatrixNodeIndexer.
+
+        Args:
+          prop_name (str): Must be in obj.vertex_properties. Name of the property based on which subnetworks
+          are to be sampled. 
+        
+        Returns:
+          _MatrixNodeIndexer associated with this object.
+        """
         assert prop_name in self._vertex_properties, "vertex property should be in " + str(self.vertex_properties)
         return _MatrixNodeIndexer(self, prop_name)
 
     def filter(self, prop_name=None):
+        """
+        Returns an object for the generation of subnetworks based on values of the specified edge property.
+        For details, see _MatrixEdgeIndexer.
+
+        Args:
+          prop_name (str): Must be in obj.edge_properties. Name of the property based on which subnetworks
+          are to be sampled. 
+        
+        Returns:
+          _MatrixEdgeIndexer associated with this object.
+        """
         if prop_name is None:
             prop_name = self._default_edge
         return _MatrixEdgeIndexer(self, prop_name)
 
     def default(self, new_default_property, copy=True):
+        """
+        Set the default edge property to return. Used in obj.matrix, obj.dense_matrix, obj.array
+
+        Args:
+          new_default_property (str): Name of the new edge property to use as default. Must be one of
+          obj.edge_properties
+          copy (optional, default: True): See below
+
+        Returns:
+          If copy is True, returns a copy of this network with the default property set. 
+          If copy is False, sets the default property of this network, then returns self.
+        """
         assert new_default_property in self.edge_properties, "Edge property {0} unknown!".format(new_default_property)
         if not copy:
             self._default_edge = new_default_property
@@ -427,7 +654,21 @@ class ConnectivityMatrix(object):
         return cls(mat, vertex_properties=nrn)
 
     def submatrix(self, sub_gids, edge_property=None, sub_gids_post=None):
-        """Return a submatrix specified by `sub_gids`"""
+        """
+        Return a submatrix specified by `sub_gids`, represented as sparse.coo_matrix.
+
+        Args:
+          sub_gids: List of nodes to return. Values must be in self.gids
+
+          edge_property (optional): Name of the edge property the values of which to return. If not
+          provided, the registered default property is used. (See obj.default())
+
+          sub_gids_post (optional): If provided, then the submatrix of connection from sub_gids to
+          sub_gids_post is returned. Else square matrix of connectivity from sub_gids to sub_gids.
+        
+        Returns:
+          sparse.coo_matrix corresponding to the spacified submatrix.
+        """
         m = self.matrix_(edge_property=edge_property).tocsc()
         if sub_gids_post is not None:
             return m[np.ix_(self._lookup[self.__extract_vertex_ids__(sub_gids)],
@@ -436,13 +677,27 @@ class ConnectivityMatrix(object):
         return m[np.ix_(idx, idx)]
 
     def dense_submatrix(self, sub_gids, edge_property=None, sub_gids_post=None):
+        """
+        See obj.submatrix. But this version returns a numpy.matrix object.
+        """
         return self.submatrix(sub_gids, edge_property=edge_property, sub_gids_post=sub_gids_post).todense()
 
     def subarray(self, sub_gids, edge_property=None, sub_gids_post=None):
+        """
+        See obj.submatrix. But this version returns a numpy.array.
+        """
         return np.array(self.dense_submatrix(sub_gids, edge_property=edge_property, sub_gids_post=sub_gids_post))
 
     def subpopulation(self, subpop_ids):
-        """A ConnectivityMatrix object representing the specified subpopulation"""
+        """
+        Generate a ConnectivityMatrix object representing the specified subpopulation
+        
+        Args:
+          subpop_ids: List of nodes to return. Entries must be in obj.gids
+        
+        Returns:
+          ConnectivityMatrix representing the subpopulation
+        """
         subpop_ids = self.__extract_vertex_ids__(subpop_ids)
         assert np.all(np.in1d(subpop_ids, self._vertex_properties.index.values))
         subpop_idx = self._lookup[subpop_ids]
@@ -497,6 +752,41 @@ class ConnectivityMatrix(object):
 
     def patch_sample(self, n, mv_mn, mv_cv, columns_xy=["x", "y"], avoidance_range=10.,
                      lim_seed=1., lim_neighborhood=3.):
+        """
+        Generate a random subpopulation based on spatial locations associated with nodes, trying to emulate
+        the spatial biases exhibited in patch-clamp experiments in neuroscience in vitro.
+
+        Args:
+          n (int): Number of nodes to sample. Must be smaller than the length of this network (number of nodes).
+
+          mv_mn (list of ints): Mean values of a multivariate gaussian expressing sampling preference. 
+
+          mv_cv (numpy.array): Covariance matrix of a multivariate gaussian expressing sampling preference.
+
+          columns_xy (list of str): Names of node properties to use as the spatial locations of nodes.
+
+          avoidance_range (float): Pairs of nodes below this distance will be avoided to be sampled together.
+
+          lim_seed (float): Maximum distance from the center (as a z-score!) of the population to sample the 
+          first node from.
+
+          lim_neighborhood (float): Maximum distance from the rest of the sampled neurons (as a z-score!) to
+          sample additional nodes from.
+
+        Returns:
+          A ConnectivityMatrix representing a random subpopulation of the specified length. It is sampled as 
+          follows:
+          The values of the node properties in columns_xy are interpreted as spatial locations associated with
+          each node. Note that any number of dimensions is supported, even > 2. mv_mn and mv_cv define a 
+          multivariate gaussian in that coordinate system. Note that their lengths must be compatible with the
+          number of dimensions. Nodes are preferably sampled from locations close to already sampled nodes 
+          according to the spatial kernel codified by the gaussian.
+          First a "seed" node is sampled randomly from the center of the population (lim_seed gives) the
+          maximal distance from the center that the seed can be, as a z-score of spatial locations. Then
+          further nodes are sampled one after another according to the spatial bias provided. 
+          Additionally, the "avoidance_range" scales down probabilities for nodes at distances between 0 and
+          the specified value. 
+        """
         nrn_slice = self._vertex_properties[columns_xy]
         avoidance_range = np.maximum(avoidance_range, 1E-4)  # To avoid division by zero
         p_dist = stats.multivariate_normal(mv_mn, mv_cv)
@@ -527,7 +817,16 @@ class ConnectivityMatrix(object):
         return self.subpopulation(neurons.index)
 
     def subedges(self, subedge_indices):
-        """A ConnectivityMatrix object representing the specified subpopulation"""
+        """
+        A ConnectivityMatrix object representing the specified subnetwork. Specifically, a subnetwork
+        containing all nodes, but only a subset of edges.
+
+        Args:
+          subedge_indices (list): List of edge indices to keep
+
+        Returns:
+          ConnectivityMatrix representing the specified subnetwork.
+        """
         if isinstance(subedge_indices, pd.Series):
             subedge_indices = subedge_indices.values
         rowcol = self._edge_indices.iloc[subedge_indices]
@@ -558,6 +857,25 @@ class ConnectivityMatrix(object):
         """
         Returns the transmission response matrices for the given spiking activity in specified time
         windows.
+
+        Args:
+          spks (pandas.Series): A Series representing spike times in the network. Each row representing
+          a single spike. Index must be a FloatIndex indicating the timing of the spike. Values are
+          identifiers of the nodes that spike, i.e. each entry must be in obj.gids.
+
+          t_wins(list of list): A list of time windows to calculate the TR graph for. Each entry must be
+          a tuple or list of length 2: [t_start, t_end]. Same units as the spike times.
+
+          max_delta_t (float): Maximum delay for a target node spiking to be considered caused by a source
+          node spiking. Same unit as the spike times.
+        
+        Returns:
+          A ConnectivityGroup, i.e. a series of ConnectivityMatrix objects, where each represents a sub-
+          network of the same nodes, but only a subset of edges. Subset of edges is picked based on the 
+          provided spiking activity as follows: An edge is considered active, if its source spiked in a
+          given time window and its target spiked within "max_delta_t" of the source spike (even if that
+          target spike is outside the time window!). The ConnectivityGroup contains one Matrix per time
+          window.
         """
         spks = spks.loc[np.isin(spks, self.vertices[GID])]
         t_wins = np.array(t_wins).reshape((-1, 2))
@@ -571,6 +889,21 @@ class ConnectivityMatrix(object):
     
     def transmission_response_rates(self, spks, t_wins, max_delta_t, show_progress=False,
                                     normalize="mean"):
+        """
+        The fraction of edges active in a TR graph with the specified parameters.
+        Args:
+          spks, t_wins, max_delta_t: See obj.transmission_response(...)
+          show_progress (optional, default False): Show progress bar while calculating.
+          normalize (str): Must be one of ["mean", "sum", "pre", "expected_simple", "expected_strong"]
+        
+        Returns:
+          The number of edges active in the TR graphs, normalized as specified:
+            "sum": No normalization.
+            "mean": Relative to the number of structurally present edges.
+            "pre": Similar to mean, but taking the out-degree of individual source neurons into account.
+            "expected_simple": Compared to expectation, based on the overall firing rate.
+            "expected_strong": Compared to expectation, based on firing rates and individual degree distributions.
+        """
         spks = spks.loc[np.isin(spks, self.vertices[GID])]
         t_wins = np.array(t_wins).reshape((-1, 2))
         assert normalize in ["mean", "sum", "pre", "expected_simple", "expected_strong"], "Unknown normalization: {0}".format(normalize)
