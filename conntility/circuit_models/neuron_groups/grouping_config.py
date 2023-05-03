@@ -117,7 +117,7 @@ def load_with_config(circ, cfg_or_dict):
     if props is None:
         from .defaults import FLAT_COORDINATES, SS_COORDINATES
         props = list(circ.nodes.property_names) + FLAT_COORDINATES + SS_COORDINATES
-    nrn = load_neurons(circ, props, cfg.get("base_target", None))
+    nrn = load_neurons(circ, props, cfg.get("base_target", None), cfg.get("node_population", None))
 
     atlases = cfg.get("atlas", [])
     try:

@@ -8,7 +8,7 @@ from .extra_properties import add_extra_properties
 from .defaults import VIRTUAL_FIBERS_FN, GID, FIBER_GID, PROJECTION, DEFAULT_EDGES
 
 
-def load_neurons(circ, properties, base_target=None, **kwargs):
+def load_neurons(circ, properties, base_target=None, node_population=None, **kwargs):
     """
     Loads information about the neurons in a Circuit. Provides access to all properties
     that Circuit.cells.get loads, plus flat mapped locations with the following names:
@@ -24,10 +24,22 @@ def load_neurons(circ, properties, base_target=None, **kwargs):
     that Circuit.cells.get loads, plus any of the additional properties listed above.
     base_target (str, optional): The name of the neuron target to load. If not provided
     loads all neurons.
+    node_population (str, optional): The name of the node population to load from. Currently,
+    in multi-population circuits, it is likely required to specify the population.
     """
     props_to_load = numpy.intersect1d(properties, list(circ.nodes.property_names))
     extra_props = numpy.setdiff1d(properties, list(circ.nodes.property_names))
-    neurons = circ.nodes.get(group=base_target, properties=props_to_load)
+    node = circ.nodes
+    if node_population is not None:
+        neurons = node[node_population].get(group=base_target, properties=props_to_load)
+        neurons.index.name = GID  # Until my pull request is merged.
+    else:
+        try:
+            neurons = node.get(group=base_target, properties=props_to_load)
+        except Exception as err:
+            if str(err).startswith("Same property"):
+                raise ValueError("In multi-population circuits, must use node_population= kwarg")
+            raise
     neurons = neurons.reset_index()
 
     neurons = add_extra_properties(neurons, circ, extra_props, **kwargs)
