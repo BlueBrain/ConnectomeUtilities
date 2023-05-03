@@ -8,36 +8,13 @@ from scipy import sparse
 
 from .neuron_groups.defaults import GID
 from .neuron_groups.sonata_extensions import projection_list
+from .sonata_helpers import LOCAL_CONNECTOME, find_sonata_connectome, get_connectome_shape
 
-LOCAL_CONNECTOME = "local"
 STR_VOID = "VOID"
 
 
-def find_sonata_connectome(circ, connectome, return_sonata_file=True):
-    """
-    Returns the sonata connectome associated with a named projection; or the default "local" connectome.
-    Input:
-    circ (bluepysnap.Circuit)
-    connectome (str): Name of the projection to look up. Use "local" for the default local (i.e. touch-based) connectome
-    return_sonata_file (optional): If true, returns the path of the .h5 file. Else returns a bluepy.Connectome.
-    """
-    if connectome == LOCAL_CONNECTOME: connectome = "default"
-    if return_sonata_file:
-        if connectome in circ.edges:
-            return circ.edges[connectome].h5_filepath
-        proj_list = projection_list(circ, return_filename_dict=True)
-        if connectome in proj_list: 
-            return proj_list[connectome]
-    if connectome in circ.edges:
-        return circ.edges[connectome]
-    proj_list = projection_list(circ)
-    if connectome in proj_list:
-        raise RuntimeError("Old style connectome {0} can only be returned as filename reference".format(connectome))
-    raise RuntimeError("Connectome {0} not found!".format(connectome))
-
-
 def full_connection_matrix(sonata_fn, n_neurons=None, population="default",
-                           edge_property=None, agg_func=None, chunk=50000000):
+                           edge_property=None, agg_func=None, shape=None, chunk=50000000):
     """
     Returns the full connection matrix encoded in a sonata h5 file.
     Input:
@@ -58,10 +35,10 @@ def full_connection_matrix(sonata_fn, n_neurons=None, population="default",
     if edge_property is not None:
         assert agg_func is not None, "Must also provide a list of functions to aggregate synapses belonging to the same connection!"
         return _full_connection_property(sonata_fn, edge_property, agg_func, n_neurons=n_neurons,
-                                         population=population, chunk=chunk)
+                                         population=population, shape=shape, chunk=chunk)
     h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
-    if n_neurons is not None:
-        n_neurons = (n_neurons, n_neurons)
+    if n_neurons is not None and shape is None:
+        shape = (n_neurons, n_neurons)
 
     dset_sz = h5['source_node_id'].shape[0]
     A = numpy.zeros(dset_sz, dtype=int)
@@ -70,11 +47,12 @@ def full_connection_matrix(sonata_fn, n_neurons=None, population="default",
     for splt_fr, splt_to in tqdm.tqdm(zip(splits[:-1], splits[1:]), total=len(splits) - 1):
         A[splt_fr:splt_to] = h5['source_node_id'][splt_fr:splt_to]
         B[splt_fr:splt_to] = h5['target_node_id'][splt_fr:splt_to]
-    M = sparse.coo_matrix((numpy.ones_like(A, dtype=bool), (A, B)), shape=n_neurons)
+    M = sparse.coo_matrix((numpy.ones_like(A, dtype=bool), (A, B)), shape=shape)
     return M.tocsr()
 
 
-def _full_connection_property(sonata_fn, edge_property, agg_func, n_neurons=None, population="default", chunk=50000000):
+def _full_connection_property(sonata_fn, edge_property, agg_func, n_neurons=None, population="default",
+                              shape=None, chunk=50000000):
     """
     Returns the full connection matrix encoded in a sonata h5 file. Instead of just a binary matrix, it looks up
     and assigns structural properties to the connections
@@ -94,8 +72,8 @@ def _full_connection_property(sonata_fn, edge_property, agg_func, n_neurons=None
     if not isinstance(agg_func, list):
         raise NotImplementedError("Currently only implemented for list-of-functions")
     h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
-    if n_neurons is not None:
-        n_neurons = (n_neurons, n_neurons)
+    if n_neurons is not None and shape is None:
+        shape = (n_neurons, n_neurons)
 
     dset_sz = h5['source_node_id'].shape[0]
     row_indices = []
@@ -115,7 +93,7 @@ def _full_connection_property(sonata_fn, edge_property, agg_func, n_neurons=None
 
     M = dict([
         (afunc,
-         sparse.coo_matrix((out_data[afunc], (row_indices, col_indices)), shape=n_neurons).tocsr())
+         sparse.coo_matrix((out_data[afunc], (row_indices, col_indices)), shape=shape).tocsr())
          for afunc in agg_func
     ])
     return M
@@ -244,7 +222,8 @@ def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, population="defa
 
 
 def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, for_gids_post=None,
-                              population="default", edge_property=None, agg_func=None, chunk=50000000):
+                              edge_population=None, node_population=None,
+                              edge_property=None, agg_func=None, chunk=50000000):
     """
     Returns a structural connection matrix, either for an entire circuit, or a subset of neurons.
     For either local connectivity or any projection. 
@@ -259,7 +238,9 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
                               NOTE: Can be used to get the matrix of external innervation!
                               For that purpose, provide the gids of innervating fibers as for_gids,
                               the gids of circuit neurons as for_gids_post and the name or the projection as connectome.
-    population (str): Sonata population to work with.
+    edge_population (str, optional): Sonata edge population name. Usually not required to be specified.
+    node_population (str, optional): Name of a node population. Only used to look up local connectomes when
+                              connectome="local" is used.
     edge_property (optional, str): Name of the synapse property to report as the value of a connection
                                    If not provided, "True" will be reported for all connections.
                                    If provided, _must_ also provide `agg_func`.
@@ -272,12 +253,18 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
     Returns:
     scipy.sparse matrix of connectivity (or a dict of those if a list is passed as `agg_func`)
     """
+    if connectome == LOCAL_CONNECTOME: 
+        from .sonata_helpers import local_connectome_for, nonvirtual_node_population
+        if node_population is None: node_population = nonvirtual_node_population(circ)
+        connectome = local_connectome_for(circ, node_population)
     conn_file = find_sonata_connectome(circ, connectome)
-    N = circ.nodes.size
+    shape = get_connectome_shape(circ, connectome)
+    if edge_population is None:
+        edge_population = connectome
     if for_gids is None:
-        return full_connection_matrix(conn_file, edge_property=edge_property, agg_func=agg_func, n_neurons=N,
-                                      population=population, chunk=chunk)
-    return connection_matrix_for_gids(conn_file, for_gids, gids_post=for_gids_post, population=population,
+        return full_connection_matrix(conn_file, edge_property=edge_property, agg_func=agg_func, shape=shape,
+                                      population=edge_population, chunk=chunk)
+    return connection_matrix_for_gids(conn_file, for_gids, gids_post=for_gids_post, population=edge_population,
                                       edge_property=edge_property, agg_func=agg_func)
 
 
