@@ -24,6 +24,38 @@
                         }
                     }
                 }
+            },
+            {
+                "nodes_file": "$BASE_DIR/POm/nodes.sonata",
+                "populations": {
+                    "POm": {
+                        "type": "virtual"
+                    }
+                }
+            },
+            {
+                "nodes_file": "$BASE_DIR/VPM/nodes.sonata",
+                "populations": {
+                    "VPM": {
+                        "type": "virtual"
+                    }
+                }
+            },
+            {
+                "nodes_file": "$BASE_DIR/nodes_external_S1nonbarrel_neurons__S1nonbarrel_neurons__chemical.sonata",
+                "populations": {
+                    "external_S1nonbarrel_neurons__S1nonbarrel_neurons__chemical": {
+                        "type": "virtual"
+                    }
+                }
+            },
+            {
+                "nodes_file": "$BASE_DIR/nodes_external_midrange__S1nonbarrel_neurons__chemical.sonata",
+                "populations": {
+                    "external_midrange__S1nonbarrel_neurons__chemical": {
+                        "type": "virtual"
+                    }
+                }
             }
         ],
         "edges": [{
