@@ -5,12 +5,12 @@ if sys.version_info < (3, 8):
     sys.exit("Sorry, Python < 3.8 is not supported.")
 
 setup(name="Connectome utilities",
-      version="0.2.0",
+      version="0.2.1",
       author="BBP",
       packages=find_packages(),
       install_requires=["numpy>=1.20.0",
                         "h5py>=3.6.0",
-                        "pandas>=1.2.4",
+                        "pandas>=2.0.0",
                         "tables>=3.6",
                         "scipy>=1.8.0",
                         "tqdm>=4.50.0",

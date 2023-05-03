@@ -1,6 +1,6 @@
 {
     "loading": {
-        "base_target": "central_column_4_region_700um", 
+        "base_target": "hex_O1", 
         "properties": ["x", "y", "z", "etype", "mtype", "layer", "ss_flat_x", "ss_flat_y"]
         },
     "filtering": [

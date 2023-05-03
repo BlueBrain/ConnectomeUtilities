@@ -1,6 +1,6 @@
 {
     "loading": {
-        "base_target": "central_column_4_region_700um", 
+        "base_target": "hex_O1", 
         "properties": ["x", "y", "z", "etype", "mtype", "layer"]
         },
     "filtering": [
@@ -16,7 +16,7 @@
     "grouping": [
         {
             "method": "group_by_properties",
-            "columns": ["mtype"]
+            "columns": ["mtype", "etype"]
         }
     ]
 }

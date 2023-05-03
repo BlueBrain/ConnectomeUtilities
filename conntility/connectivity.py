@@ -237,7 +237,7 @@ class _MatrixEdgeIndexer(object):
         parent_edges = parent_edges.reset_index().set_index(["row", "col"])["index"]
 
         out_edges = []
-        for _idx, n in ref_counts.iteritems():
+        for _idx, n in ref_counts.items():
             out_edges.extend(np.random.choice(parent_edges[_idx].values, n, replace=False))
         return out_edges
     
@@ -1441,23 +1441,23 @@ class TimeDependentMatrix(ConnectivityMatrix):
         if len(args) == 1 and isinstance(args[0], np.ndarray) or isinstance(args[0], sparse.spmatrix):
             raise ValueError("TimeDependentMatrix can only be initialized by edge indices and edge properties")
         if isinstance(edge_properties, dict):
-            assert np.all([isinstance(x.columns, pd.Float64Index) for x in edge_properties.values()]),\
-                 "Index of edge properties must be a Float64Index"
+            assert np.all([x.columns.dtype==float for x in edge_properties.values()]),\
+                 "Index of edge properties must be a float Index"
             edge_properties = pd.concat(edge_properties.values(), keys=edge_properties.keys(), names=["name"], axis=1)
             edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])
         else:
             assert isinstance(edge_properties, pd.DataFrame)
             if isinstance(edge_properties.columns, pd.MultiIndex):
                 assert len(edge_properties.columns.levels) == 2, "Columns must index time and name"
-                if not isinstance(edge_properties.columns.levels[0], pd.Float64Index):
-                    assert isinstance(edge_properties.columns.levels[1], pd.Float64Index),\
-                        "Time index must be of type Float64Index"
+                if not edge_properties.columns.levels[0].dtype==float:
+                    assert edge_properties.columns.levels[1].dtype==float,\
+                        "Time index must be of type float Index"
                     edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])
                 else:
-                    assert isinstance(edge_properties.columns.levels[0], pd.Float64Index),\
-                        "Time index must be of type Float64Index"
+                    assert edge_properties.columns.levels[0].dtype==float,\
+                        "Time index must be of type float Index"
             else:
-                assert isinstance(edge_properties.columns, pd.Float64Index),\
+                assert edge_properties.columns.dtype==float,\
                         "Time index must be of type Float64Index"
                 edge_properties = pd.concat([edge_properties], axis=1, copy=False, keys=["data"], names=["name"])
                 edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])

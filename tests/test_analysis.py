@@ -2,8 +2,6 @@ import os
 import numpy
 import pandas
 
-import bluepy
-
 from conntility.analysis import library as test_module
 
 TST_SZ = 100

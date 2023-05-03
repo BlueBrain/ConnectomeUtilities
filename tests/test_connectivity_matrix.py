@@ -2,13 +2,13 @@ import os
 import pandas
 import numpy
 
-import bluepy
+import bluepysnap as snap
 
 from scipy import sparse
 from conntility import connectivity as test_module
 
-CIRC_FN = "/gpfs/bbp.cscs.ch/project/proj83/circuits/Bio_M/20200805/CircuitConfig_TC_WM"
-CIRC = bluepy.Circuit(CIRC_FN)
+CIRC_FN = "examples/data/circuit_config.json"
+CIRC = snap.Circuit(CIRC_FN)
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_DATA_DIR = os.path.join(TEST_DIR, "data")
@@ -31,7 +31,9 @@ def test_from_bluepy():
             },
             "filtering": {"column": "etype", "value": "bIR"}
             }
-    M = test_module.ConnectivityMatrix.from_bluepy(CIRC, load_config=load_cfg)
+    M = test_module.ConnectivityMatrix.from_bluepy(CIRC, load_config=load_cfg,
+                                                   connectome="S1nonbarrel_neurons__S1nonbarrel_neurons__chemical",
+                                                   population="S1nonbarrel_neurons__S1nonbarrel_neurons__chemical")
     ue = numpy.unique(M.etype)
     ul = numpy.unique(M.layer)
     assert len(ue) == 1 and ue[0] == "bIR"
