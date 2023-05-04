@@ -68,7 +68,7 @@ def input_innervation(sim, base_target=None, proj_names=None, neuron_properties=
     nrn: DataFrame of the specified neuron anatomical properties
     """
     # TODO: UPDATE FOR SONATA!
-    from .neuron_groups import load_neurons, load_all_projection_locations
+    from .neuron_groups import load_neurons, load_all_source_locations
     from .connection_matrix import circuit_cross_group_matrices
     from .neuron_groups.defaults import GID, FIBER_GID
 
@@ -82,7 +82,7 @@ def input_innervation(sim, base_target=None, proj_names=None, neuron_properties=
     nrn = pandas.concat([nrn], keys=["neurons"], names=["__cell_type"])
     nrn = nrn.set_index(nrn.index.droplevel(-1))
 
-    projections = load_all_projection_locations(circ, [], proj_names=proj_names)
+    projections = load_all_source_locations(circ, [], proj_names=proj_names)
     projections[GID] = projections[FIBER_GID]  # TODO: ASSUMES OFFSET FOR FIBER GIDS!
     proj_gids = projections.groupby("projection").apply(lambda x: x[GID].values)
 

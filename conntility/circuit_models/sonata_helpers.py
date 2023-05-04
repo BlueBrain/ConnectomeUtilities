@@ -1,11 +1,9 @@
 import numpy
 
-from .neuron_groups.sonata_extensions import projection_list
-
 LOCAL_CONNECTOME = "local"
 
 
-def find_sonata_connectome(circ, connectome, return_sonata_file=True):
+def find_sonata_connectome(circ, connectome, return_sonata_file=True, assert_is_recurrent=False):
     """
     Returns the sonata connectome associated with a named projection; or the default "local" connectome.
     Input:
@@ -15,17 +13,14 @@ def find_sonata_connectome(circ, connectome, return_sonata_file=True):
     """
     if connectome == LOCAL_CONNECTOME: 
         connectome = local_connectome_for(circ, nonvirtual_node_population(circ))
-    if return_sonata_file:
-        if connectome in circ.edges:
-            return circ.edges[connectome].h5_filepath
-        proj_list = projection_list(circ, return_filename_dict=True)
-        if connectome in proj_list: 
-            return proj_list[connectome]
+    
     if connectome in circ.edges:
+        if assert_is_recurrent:
+            assert circ.edges[connectome].source.name == circ.edges[connectome].target.name, "Recurrent connectome required!"
+        if return_sonata_file:
+            return circ.edges[connectome].h5_filepath
         return circ.edges[connectome]
-    proj_list = projection_list(circ)
-    if connectome in proj_list:
-        raise RuntimeError("Old style connectome {0} can only be returned as filename reference".format(connectome))
+
     raise RuntimeError("Connectome {0} not found!".format(connectome))
 
 
@@ -54,10 +49,17 @@ def local_connectome_for(circ, node_pop):
     return hits[0]
 
 
-def projection_connectomes_for(circ, node_pop):
+def source_connectomes_for(circ, node_pop):
     hits = [k for k, v in circ.edges.items()
             if v.source.name != node_pop
             and v.target.name == node_pop]
+    return hits
+
+
+def target_connectomes_for(circ, node_pop):
+    hits = [k for k, v in circ.edges.items()
+            if v.source.name == node_pop
+            and v.target.name != node_pop]
     return hits
 
 

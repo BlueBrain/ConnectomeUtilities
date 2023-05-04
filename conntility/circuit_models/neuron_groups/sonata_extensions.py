@@ -6,7 +6,6 @@ SONATA_CONNECTOME_FN = "edges.sonata"
 STR_ATLAS_DIR = "atlas_dir"
 ATLAS_LOC = "atlas"
 HIERARCHY_FN = "hierarchy.json"
-PROJECTION_LOC = "projections"
 STR_NODE_SETS = "node_sets_file"
 
 
@@ -48,37 +47,6 @@ def load_atlas_hierarchy(circ):
     if atlas is None: raise RuntimeError("No atlas directory found!")
     hier_fn = os.path.join(atlas, HIERARCHY_FN)
     return voxcell.RegionMap.load_json(hier_fn)
-
-def projection_dir(circ):
-    circ_base = circuit_base_dir(circ)
-    if circ_base is None: return None
-    projections = os.path.join(circ_base, PROJECTION_LOC)
-    if os.path.exists(projections): return projections
-    return None
-
-def projection_fiber_info(circ, projection_name):
-    if projection_name in circ.edges:
-        projection_fn = circ.edges[projection_name].h5_filepath
-        vfib_file = os.path.join(os.path.split(os.path.abspath(projection_fn))[0], VIRTUAL_FIBERS_FN)
-        return vfib_file
-    
-    proj_dir = projection_dir(circ)
-    if proj_dir is None: return None
-    vfib_file = os.path.join(proj_dir, projection_name, VIRTUAL_FIBERS_FN)
-    if os.path.exists(vfib_file): return vfib_file
-    return None
-
-def projection_list(circ, return_filename_dict=False):
-    import glob
-    proj_dir = projection_dir(circ)
-    if proj_dir is None: return []
-
-    projections = glob.glob("**/" + SONATA_CONNECTOME_FN, root_dir=proj_dir, recursive=True)
-    if return_filename_dict:
-        return dict([(os.path.split(_x)[0], os.path.join(proj_dir, _x))
-                     for _x in projections])
-    projections = [os.path.split(_x)[0] for _x in projections]
-    return projections
 
 def input_spikes(sim):
     """

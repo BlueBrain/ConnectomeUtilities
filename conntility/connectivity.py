@@ -619,37 +619,58 @@ class ConnectivityMatrix(object):
 
     @staticmethod
     def __extract_vertex_ids__(an_obj):
-        if hasattr(an_obj, GID):  # TODO: "gid" vs "gids" mismatch?
+        if hasattr(an_obj, GID):
             return getattr(an_obj, GID)
         return an_obj
 
     @classmethod
-    def from_bluepy(cls, bluepy_obj, load_config=None, gids=None, connectome=LOCAL_CONNECTOME, **kwargs):
+    def from_bluepy(cls, bluepy_obj, load_config=None, connectome=LOCAL_CONNECTOME, **kwargs):
         """
         Sonata config based constructor
         :param bluepy_obj: bluepysnap Simulation or Circuit object
         :param load_config: config dict for loading and filtering neurons from the circuit
-        :param gids: array of gids AKA. the nodes of the graph, if not None: the intersection of these gids
-                     and the ones loaded based on the `load_config` will be used
-        :param connectome: str. that can be "local" which specifies local circuit connectome
-                           or the name of a projection to use
+        :param connectome: string that specifies the name of an EdgeCollection to load. Must
+        be in bluepy_obj.edges, or "local". If "local", then a recurrent connectome is 
+        heuristically estimated. In that case it is recommended to specify a node_population
+        to load in the load_config. The heuristics for guessing a "local" connectome are
+        documented in conntility.circuit_models.circuit_connection_matrix.
+
         """
         from .circuit_models.neuron_groups import load_filter
         from .circuit_models import circuit_connection_matrix
+        from .circuit_models.neuron_groups.grouping_config import _read_if_needed
 
         if hasattr(bluepy_obj, "circuit"):
             circ = bluepy_obj.circuit
         else:
             circ = bluepy_obj
+        load_config = _read_if_needed(load_config)
         
-        nrn = load_filter(circ, load_config)
+        if connectome != LOCAL_CONNECTOME:
+            if circ.edges[connectome].source.name != circ.edges[connectome].target.name:
+                if "source" not in load_config or "target" not in load_config:
+                    load_config = {"source": load_config.copy(), "target": load_config.copy()}
+                nrn_pre = load_filter(circ, load_config["source"],
+                                      node_population=circ.edges[connectome].source.name)
+                nrn_post = load_filter(circ, load_config["target"],
+                                       node_population=circ.edges[connectome].target.name)
+                mat = circuit_connection_matrix(circ, for_gids=nrn_pre.index.values,
+                                                for_gids_post=nrn_post.index.values,
+                                                connectome=connectome, **kwargs).tocoo()
+                _shape = (np.sum(mat.shape), np.sum(mat.shape))
+                mat = sparse.coo_matrix((mat.data, (mat.row, mat.col + mat.shape[0])), shape=_shape)
+                nrn = pd.concat([nrn_pre, nrn_post], axis=0,
+                                 keys=["Source", "Target"],
+                                 names=["connection"]).droplevel(1).reset_index()
+                nrn.index.name="local_ids"
+                return cls(mat, vertex_properties=nrn)
+
+            nrn = load_filter(circ, load_config, node_population=circ.edges[connectome].source.name)
+        else:
+            nodepop = load_config.get("loading", load_config).get("node_population", None)
+            nrn = load_filter(circ, load_config, node_population=nodepop)
+        
         nrn = nrn.set_index(GID)
-        # TODO: decide if this extra filtering is needed (or make load_config optional
-        #  and implement gid based property loading in circuit_models.neuron_groups)
-        if gids is not None:
-            nrn = nrn.loc[nrn.index.intersection(gids)]
-        # TODO: think a bit about if it should even be possible to call this for a projection (remove arg. if not...)
-        # TODO: Add option to look up synapse properties here
         mat = circuit_connection_matrix(circ, for_gids=nrn.index.values, connectome=connectome, **kwargs)
         return cls(mat, vertex_properties=nrn)
 

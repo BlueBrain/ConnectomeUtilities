@@ -7,7 +7,6 @@ import os
 from scipy import sparse
 
 from .neuron_groups.defaults import GID
-from .neuron_groups.sonata_extensions import projection_list
 from .sonata_helpers import LOCAL_CONNECTOME, find_sonata_connectome, get_connectome_shape
 
 STR_VOID = "VOID"
@@ -229,8 +228,10 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
     For either local connectivity or any projection. 
     Input:
     circ (bluepysnap.Circuit)
-    connectome (str): Which connectome to return. Can be either "local", returning the
-                      touch connectome or the name of any projection defined in the CircuitConfig.
+    connectome (str): Which connectome to return. Can be any EdgePopulation in circ.edges. If not provided,
+                      it will be heuristically guessed using the value of node_population. The first EdgePopulation
+                      that has the specified node_population as both source and target will be used. If 
+                      node_population is also not provided, then the largest non-virtual population will be used.
     for_gids: List of neuron gids to get the connectivity for.
     for_gids_post (optional): If given, then connectivity FROM for_gids TO for_gids_post will be returned.
                               Else: FROM for_gids TO for_gids.
@@ -252,6 +253,9 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
 
     Returns:
     scipy.sparse matrix of connectivity (or a dict of those if a list is passed as `agg_func`)
+    Note: By default, returns binary connectivity, i.e. only the presence or absence of at least one connection between
+    nodes. If you want to count connections, use the edge_property=... with any valid edge property and 
+    agg_func=len
     """
     if connectome == LOCAL_CONNECTOME: 
         from .sonata_helpers import local_connectome_for, nonvirtual_node_population
@@ -272,7 +276,11 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
                            column_gid=GID, **kwargs):
     """
     Returns matrices of the structural connectivity within specified groups of neurons.
-    For either local connectivity or any projection. 
+    For any EdgePopulation (specified as connectome=...).
+
+    Note: This function strongly assumes that the source and target node population of the specified
+    connectome match the nodes specified in neuron_groups. No check is performed!
+
     Input:
     circ (bluepysnap.Circuit)
     neuron_groups (pandas.DataFrame): Frame of neuron grouping info. 
@@ -289,14 +297,12 @@ def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, ext
     of neuron_groups.
     """
     if isinstance(neuron_groups, pandas.DataFrame):
-        neuron_groups = neuron_groups[GID]
+        neuron_groups = neuron_groups[column_gid]
     neuron_groups = neuron_groups.groupby(neuron_groups.index.names)
     if not extract_full:
         matrices = neuron_groups.apply(lambda grp: circuit_connection_matrix(circ, connectome=connectome,
                                                                              for_gids=grp.values, **kwargs))
     else:
-        # TODO: Assumes the full matrix is index from id 0 to N-1, which it should. But what if some gids are missing?
-        # Will definetly fail with multiple node populations!
         full_matrix = circuit_connection_matrix(circ, connectome=connectome, **kwargs)
         matrices = neuron_groups.apply(lambda grp: full_matrix[numpy.ix_(grp.values, grp.values)])
     matrices = matrices[matrices.apply(lambda x: isinstance(x, sparse.spmatrix))]
@@ -309,7 +315,11 @@ def circuit_cross_group_matrices(circ, neuron_groups_pre, neuron_groups_post, co
     Returns the structural connectivity between (and within) specified groups of neurons.
     That is, a number of matrices of structural connectivity between neurons in group A and B. 
     This can be thought of as one big matrix, broken up into sub-matrices by group.
-    For either local connectivity or any projection. 
+    For any EdgePopulation (specified as connectome=...).
+
+    Note: This function strongly assumes that the source and target of the EdgePopulation match the 
+    nodes given in neuron_groups_pre and neuron_groups_post. No check is performed!
+
     Input:
     circ (bluepy.Circuit)
     neuron_groups_pre (pandas.DataFrame): Frame of neuron grouping info. 
@@ -318,8 +328,10 @@ def circuit_cross_group_matrices(circ, neuron_groups_pre, neuron_groups_post, co
     neuron_groups_post (pandas.DataFrame): Frame of neuron grouping info. 
     These groups will be the groups _receiving_ the connections that are considered. Can be the same as 
     neuron_groups_pre.
-    connectome (str, default: "local"): Which connectome to return. Can be either "local", returning the 
-    touch connectome or the name of any projection defined in the CircuitConfig.
+    connectome (str, default: "local"): Which connectome to return. Can be any EdgePopulation in circ.edges.
+    If "local", a local recurrent connectome will be heuristically guessed. In that case, it is best to
+    also specify the name of a node population using node_population=...
+    The way a "local" connectome is guessed from node_population=... is documented in circuit_connection_matrix()
     extract_full (bool, default: False): If set to True, this will first extract the _complete_ connection
     matrix between all neurons, then look up the relevant parts of that huge matrix. This can be faster,
     if the neuron_groups are a partition of all neurons, or close to it. But it uses much more memory.
@@ -344,18 +356,13 @@ def circuit_cross_group_matrices(circ, neuron_groups_pre, neuron_groups_post, co
         return res
 
     def prepare_con_mat(df_pre):
-        _connectome = connectome
-        if connectome is None:  # Fallback
-            from .neuron_groups.defaults import PROJECTION
-            assert PROJECTION in df_pre.index.names
-            tmp = df_pre.index.to_frame()[PROJECTION].unique()
-            assert len(tmp) == 1
-            _connectome = tmp[0]
-
         def execute_con_mat(df_post):
+            if len(df_pre) == 0 or len(df_post) == 0:
+                _shape = (len(df_pre), len(df_post))
+                return sparse.csc_matrix(numpy.empty(shape=_shape, dtype=bool))
             return circuit_connection_matrix(circ, for_gids=df_pre[column_gid].values,
                                              for_gids_post=df_post[column_gid].values,
-                                             connectome=_connectome, **kwargs)
+                                             connectome=connectome, **kwargs)
 
         return execute_con_mat
 
@@ -380,7 +387,7 @@ def _make_node_lookup(circ, neuron_groups, column_gid, fill_unused_gids=True):
     return node_lookup
 
 
-def connection_matrix_between_groups_partition(sonata_fn, node_lookup, population="default", chunk=50000000):
+def connection_matrix_between_groups_partition(sonata_fn, node_lookup, population, chunk=50000000):
     # TODO: If the user accidently provides a "neuron_groups" instead of "node_lookup" input give helpful message
     # TODO: Evaluate if it is necessary to fill node_lookup for unused gids with STR_VOID
     """
@@ -445,25 +452,31 @@ def connection_matrix_between_groups_partial(sonata_fn, node_lookup, population=
     return counts
 
 
-def circuit_matrix_between_groups(circ, neuron_groups, connectome=LOCAL_CONNECTOME,
-                                  population="default", extract_full=False, column_gid=GID):
+def circuit_matrix_between_groups(circ, neuron_groups, connectome,
+                                  edge_population=None, extract_full=False, column_gid=GID):
     """
     Returns the number of structural connections between (and within) specified groups of neurons.
     That is, single matrix of the _number_ of connections between group A and B.  
     This can be thought of as a connectome with reduced resolution, as it is similar to
     a voxelized connectome. In fact, if the neuron_groups are based on binned x, y, z coordinates,
     this essentially returns a voxelized connectome!
-    For either local connectivity or any projection. 
+    For any EdgePopulation in circ.edges.
+
+    Note: This function strongly assumes that the source and target of the specified connectome match the
+    neurons given in neuron_groups. It is up to the user to ensure that!
+    Note: If there are multiple connection (synapses) between a pair of nodes, they will be counted multiple
+    times!
+
     Input:
     circ (bluepysnap.Circuit)
     neuron_groups (pandas.DataFrame): Frame of neuron grouping info. 
     See conntility.circuit_models.neuron_groups for information how a group is defined.
-    connectome (str, default: "local"): Which connectome to return. Can be either "local", returning the 
-    touch connectome or the name of any projection defined in the CircuitConfig.
+    connectome (str): Which connectome to return. Must be in circ.edges.
+    edge_population (str, optional): Name of the edge population in the connectome. Usually not needed to be specified.
     extract_full (bool, default: False): If set to True, this will first extract the _complete_ connection
     matrix between all neurons, then look up and sum the relevant parts of that huge matrix. This can be faster,
     if the neuron_groups are a partition of all neurons, or close to it. But it uses much more memory.
-    column_gid (str, default: "gid"): Name of the column of neuron_groups pre/post that holds the gid of a neuron.
+    column_gid (str, default: "node_ids"): Name of the column of neuron_groups pre/post that holds the gid of a neuron.
 
     Returns:
     pandas.DataFrame of connection counts. Index of the frame will be a MultiIndex with the columns
@@ -475,11 +488,15 @@ def circuit_matrix_between_groups(circ, neuron_groups, connectome=LOCAL_CONNECTO
     have to concatenate a group definition for the innervating fibers and a group definition for the circuit
     neurons. 
     """
-    conn_file = find_sonata_connectome(circ, connectome)
+    # TODO: Support "local" connectome?
+    # TODO: Support non-recurrent connectome!
+    conn_file = find_sonata_connectome(circ, connectome, assert_is_recurrent=True)
+    if edge_population is None:
+        edge_population = connectome
 
     if extract_full:
         node_lookup = _make_node_lookup(circ, neuron_groups, column_gid)
-        return connection_matrix_between_groups_partition(conn_file, node_lookup, population=population)
+        return connection_matrix_between_groups_partition(conn_file, node_lookup, population=edge_population)
     else:
         node_lookup = _make_node_lookup(circ, neuron_groups, column_gid, fill_unused_gids=False)
-        return connection_matrix_between_groups_partial(conn_file, node_lookup, population=population)
+        return connection_matrix_between_groups_partial(conn_file, node_lookup, population=edge_population)

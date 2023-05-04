@@ -109,15 +109,19 @@ def filter_config_to_dict(cfg_or_dict):
     return dict(lst_tf)
 
 
-def load_with_config(circ, cfg_or_dict):
+def load_with_config(circ, cfg_or_dict, node_population=None):
     cfg = _read_if_needed(cfg_or_dict)
     if "loading" in cfg:
         cfg = cfg["loading"]
+    node_population = node_population or cfg.get("node_population", None)
     props = cfg.get("properties")
     if props is None:
         from .defaults import FLAT_COORDINATES, SS_COORDINATES
-        props = list(circ.nodes.property_names) + FLAT_COORDINATES + SS_COORDINATES
-    nrn = load_neurons(circ, props, cfg.get("base_target", None), cfg.get("node_population", None))
+        if node_population is None:
+            props = list(circ.nodes.property_names)
+        else:
+            props = list(circ.nodes[node_population].property_names)
+    nrn = load_neurons(circ, props, cfg.get("base_target", None), node_population)
 
     atlases = cfg.get("atlas", [])
     try:
@@ -141,11 +145,11 @@ def load_with_config(circ, cfg_or_dict):
     return nrn
     
 
-def load_group_filter(circ, cfg_or_dict):
+def load_group_filter(circ, cfg_or_dict, node_population=None):
     cfg_or_dict = cfg_or_dict or {}
     ret = filter_with_config(
         group_with_config(
-            load_with_config(circ, cfg_or_dict),
+            load_with_config(circ, cfg_or_dict, node_population=node_population),
             cfg_or_dict
         ),
         cfg_or_dict
@@ -153,10 +157,10 @@ def load_group_filter(circ, cfg_or_dict):
     return ret
 
 
-def load_filter(circ, cfg_or_dict):
+def load_filter(circ, cfg_or_dict, node_population=None):
     cfg_or_dict = cfg_or_dict or {}
     ret = filter_with_config(
-        load_with_config(circ, cfg_or_dict),
+        load_with_config(circ, cfg_or_dict, node_population=node_population),
         cfg_or_dict
     )
     return ret

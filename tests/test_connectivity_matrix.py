@@ -32,8 +32,7 @@ def test_from_bluepy():
             "filtering": {"column": "etype", "value": "bIR"}
             }
     M = test_module.ConnectivityMatrix.from_bluepy(CIRC, load_config=load_cfg,
-                                                   connectome="S1nonbarrel_neurons__S1nonbarrel_neurons__chemical",
-                                                   population="S1nonbarrel_neurons__S1nonbarrel_neurons__chemical")
+                                                   connectome="S1nonbarrel_neurons__S1nonbarrel_neurons__chemical")
     ue = numpy.unique(M.etype)
     ul = numpy.unique(M.layer)
     assert len(ue) == 1 and ue[0] == "bIR"
