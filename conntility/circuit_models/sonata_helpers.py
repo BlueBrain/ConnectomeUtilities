@@ -1,4 +1,4 @@
-import numpy
+import numpy, pandas
 
 LOCAL_CONNECTOME = "local"
 
@@ -76,3 +76,19 @@ def nonvirtual_node_population(circ):
     if len(hits) > 1:
         print("Warning: More than one non-virtual nodes population. Returning the largest: {0}".format(hits[idx]))
     return hits[idx]
+
+
+def resolve_node_set(circ, node_set):
+    res = []
+    for name, nds in circ.nodes.items():
+        local_pop = {
+            "node_ids": nds.ids(node_set, raise_missing_property=False)
+        }
+        local_pop["population"] = [name] * len(local_pop["node_ids"])
+        res.append(pandas.DataFrame(local_pop))
+    return pandas.concat(res, axis=0).reset_index(drop=True)
+
+
+def simulated_nodes(sim):
+    circ = sim.circuit
+    return resolve_node_set(circ, sim.config["node_set"])

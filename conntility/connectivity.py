@@ -639,6 +639,7 @@ class ConnectivityMatrix(object):
         from .circuit_models.neuron_groups import load_filter
         from .circuit_models import circuit_connection_matrix
         from .circuit_models.neuron_groups.grouping_config import _read_if_needed
+        #TODO: Support lookup using circuit_node_set_matrix!
 
         if hasattr(bluepy_obj, "circuit"):
             circ = bluepy_obj.circuit

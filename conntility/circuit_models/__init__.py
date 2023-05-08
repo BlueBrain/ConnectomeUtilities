@@ -1,6 +1,6 @@
 from . import neuron_groups
 from .connection_matrix import connection_matrix_for_gids, connection_matrix_between_groups_partial, connection_matrix_between_groups_partition
 from .connection_matrix import circuit_connection_matrix, circuit_matrix_between_groups, circuit_group_matrices
-from .connection_matrix import full_connection_matrix, circuit_cross_group_matrices
-from .input_spikes import input_spikes, input_innervation, input_innervation_from_matrix
+from .connection_matrix import full_connection_matrix, circuit_cross_group_matrices, circuit_node_set_matrix
+from .input_spikes import input_innervation, input_innervation_from_matrix
 from .neuron_groups.sonata_extensions import simulation_conditions

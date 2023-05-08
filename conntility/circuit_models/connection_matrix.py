@@ -272,6 +272,42 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
                                       edge_property=edge_property, agg_func=agg_func)
 
 
+def circuit_node_set_matrix(circ, for_node_set, for_node_set_post=None):
+    """
+    Returns a structural connection matrix within or between defined node sets. That is, unlike 
+    circuit_connection_matrix this function can aggregate over multiple edge_populations and
+    node_populations.
+    """
+    from .sonata_helpers import resolve_node_set
+
+    if not isinstance(for_node_set, pandas.DataFrame):
+        node_set_pre = resolve_node_set(circ, for_node_set).reset_index().set_index("population")
+    else: node_set_pre = for_node_set.reset_index().set_index("population")
+    if for_node_set_post is None: node_set_post = node_set_pre
+    elif not isinstance(for_node_set_post, pandas.DataFrame):
+        node_set_post = resolve_node_set(circ, for_node_set_post).reset_index().set_index("population")
+    else: node_set_post = for_node_set_post.reset_index().set_index("population")
+
+    row = []; col = []; data = []
+    for edge_name, edges in circ.edges.items():
+        rel_pre = edges.source.name in node_set_pre.index
+        rel_post = edges.target.name in node_set_post.index
+        if rel_pre and rel_post:
+            tM = circuit_connection_matrix(circ, connectome=edge_name,
+                                           for_gids=node_set_pre["node_ids"][edges.source.name],
+                                           for_gids_post=node_set_post["node_ids"][edges.target.name]).tocoo()
+            tgt_ids = node_set_post["index"][edges.target.name]
+            src_ids = node_set_pre["index"][edges.source.name]
+            
+            row.extend(src_ids.iloc[tM.row])
+            col.extend(tgt_ids.iloc[tM.col])
+            data.extend(tM.data)
+    M_out = sparse.coo_matrix((data, (row, col)), shape=(len(node_set_pre), len(node_set_post)))
+    node_set_pre = node_set_pre.reset_index().set_index("index")
+    node_set_post = node_set_post.reset_index().set_index("index")
+    return M_out, node_set_pre, node_set_post
+
+
 def circuit_group_matrices(circ, neuron_groups, connectome=LOCAL_CONNECTOME, extract_full=False,
                            column_gid=GID, **kwargs):
     """

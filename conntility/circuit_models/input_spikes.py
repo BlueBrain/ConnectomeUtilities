@@ -25,7 +25,7 @@ def input_innervation_from_matrix(spikes, matrix, gids_pre, t_win=None):
     internal connection matrix for "matrix")
     """
     from scipy import sparse
-    assert isinstance(matrix, sparse.data._data_matrix), "Input connection matrix must be sparse!"
+    assert sparse.issparse(matrix), "Input connection matrix must be sparse!"
 
     if t_win is not None:
         if hasattr(t_win[0], "__iter__"):  # TODO: Take this out!
@@ -45,58 +45,56 @@ def input_innervation_from_matrix(spikes, matrix, gids_pre, t_win=None):
     return innervation
 
 
-def input_innervation(sim, base_target=None, proj_names=None, neuron_properties=[], t_wins=None):
+def _input_innervation(sim, stim, t_win=None):
+    from .connection_matrix import circuit_node_set_matrix
+    from .sonata_helpers import simulated_nodes, resolve_node_set
+
+    circ = sim.circuit
+    sim_target = simulated_nodes(sim)
+    stim_target = resolve_node_set(circ, stim["node_set"])
+    source = resolve_node_set(circ, stim["source"])
+
+    A = sim_target.value_counts()
+    B = stim_target.value_counts()
+    target = (A & B).reset_index().set_index("count").loc[True].reset_index(drop=True)
+
+    sM, src, tgt = circuit_node_set_matrix(circ, source, target)
+    s = pandas.read_csv(stim["spike_file"], sep="\s+").rename(columns={"/scatter": "node_id"})["node_id"]
+    res = input_innervation_from_matrix(s, sM, src["node_ids"].values, t_win=t_win)
+    if t_win is None:
+        tgt["input_spike_count"] = res
+    else:
+        for k, v in res.items(): tgt[k] = v
+    return tgt.set_index(["population", "node_ids"])
+
+
+def input_innervation(sim, t_win=None, sum=True):
     """
     How strongly each neuron is innervated by the simulation input spikes
     Input:
     sim (bluepysnap.Simulation)
-    base_target (str): Name of the neuron target to count innervation for.
-    proj_names (list): List of strings of names of projections to consider. Default: None,
-    which considers all projections.
-    neuron_properties (list): List of anatomical neuron properties to return
-    in addition.
-    t_wins (optional, list of tuples): List of time windows of interest. If not
+    t_win (optional, list of tuples): List of time windows of interest. If not
     provided, the entire simulation is considered as one single time bin.
+    sim (optional, default=True): If True, sum up the contributions of different
+    spike replay blocks. Else return them individually in a list.
     
     Returns:
-    innervation: A pandas.Series of input spike count for each neuron in base_target.
+    innervation: A pandas.DataFrame with input spike counts in columns.
     Indexed by: 
-       "projection": name of the projection doing the innervating
-       "gid": gid of the innervated neuron.
-    If t_wins is provided additionally index by:
-       "t_win": Time window of innervation.
-    nrn: DataFrame of the specified neuron anatomical properties
+       "population": name of the node population being innervated
+       "node_ids": ids of the innervated neurons.
+    Column names are either ["input_spike_count"] or the names of the time windows,
+    if specified.
     """
-    # TODO: UPDATE FOR SONATA!
-    from .neuron_groups import load_neurons, load_all_source_locations
-    from .connection_matrix import circuit_cross_group_matrices
-    from .neuron_groups.defaults import GID, FIBER_GID
+    spks = [_spks for _spks in sim.config["inputs"].values() if _spks["input_type"] == "spikes"]
+    if len(spks) == 0: return None
 
-    spikes = input_spikes(sim)
-    circ = sim.circuit
-
-    # if base_target is None:  # TODO: How does this work in Sonata?
-    #     base_target = sim.config.Run["CircuitTarget"]
-    nrn = load_neurons(circ, neuron_properties, base_target=base_target)
-
-    nrn = pandas.concat([nrn], keys=["neurons"], names=["__cell_type"])
-    nrn = nrn.set_index(nrn.index.droplevel(-1))
-
-    projections = load_all_source_locations(circ, [], proj_names=proj_names)
-    projections[GID] = projections[FIBER_GID]  # TODO: ASSUMES OFFSET FOR FIBER GIDS!
-    proj_gids = projections.groupby("projection").apply(lambda x: x[GID].values)
-
-    M = circuit_cross_group_matrices(circ, projections, nrn, connectome=None).stack()
-    M = M.droplevel("__cell_type")
-    if t_wins is not None:
-        innervation = [M.combine(proj_gids,
-                                 lambda m, g: input_innervation_from_matrix(spikes, m, g, t_win=t_win))
-                       for t_win in t_wins]
-        innervation = pandas.concat(innervation, keys=["{0}-{1}".format(*t_win) for t_win in t_wins],
-                                    names=["t_win"])
+    res = _input_innervation(sim, spks[0], t_win=t_win)
+    if sum:
+        for spk in spks[1:]:
+            res = res.add(_input_innervation(sim, spk, t_win=t_win), fill_value=0)
     else:
-        innervation = M.combine(proj_gids, lambda m, g: input_innervation_from_matrix(spikes, m, g))
-    innervation = innervation.apply(lambda v: pandas.Series(v, index=nrn[GID])).stack()
-
-    return innervation, nrn
-
+        res = [res]
+        for spk in spks[1:]:
+            res.append(_input_innervation(sim, spk, t_win=t_win))
+    return res
