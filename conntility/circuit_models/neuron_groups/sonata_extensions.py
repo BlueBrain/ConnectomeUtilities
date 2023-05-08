@@ -48,33 +48,6 @@ def load_atlas_hierarchy(circ):
     hier_fn = os.path.join(atlas, HIERARCHY_FN)
     return voxcell.RegionMap.load_json(hier_fn)
 
-def input_spikes(sim):
-    """
-    Returns a pandas.Series of the input spikes given to a Simulation.
-    Input:
-    sim (bluepysnap.Simulation)
-
-    Returns:
-    spikes, pandas.Series of input spike ids. Formatted the same as Simulation.spikes
-    (i.e. the output spikes).
-    """
-    # TODO: UPDATE FOR SONATA!
-    def read_csv(path):
-        data = pandas.read_csv(path, delim_whitespace=True)["/scatter"]
-        data.name = "gid"
-        data.index.name = "t"
-        return data
-
-    sim_root = sim._config._config_dir
-
-    stim = [stim for stim in sim.config.typed_sections("Stimulus") if stim["Pattern"] == "SynapseReplay"]
-    if len(stim) == 0:
-        return pandas.Series([], index=pandas.Float64Index([], name="t"), name="gid", dtype=float)
-
-    stim = [_stim["SpikeFile"] for _stim in stim]
-    stim = [_stim if os.path.isabs(_stim) else os.path.join(sim_root, _stim) for _stim in stim]
-    spks = pandas.concat([read_csv(_stim) for _stim in stim], axis=0)
-    return spks
 
 def simulation_conditions(sim):
     """

@@ -1,7 +1,26 @@
 import pandas
 import numpy
 
-from .neuron_groups.sonata_extensions import input_spikes
+
+def input_spikes(sim):
+    from .sonata_helpers import simulated_nodes, resolve_node_set
+
+    circ = sim.circuit
+    spks = [_spks for _spks in sim.config["inputs"].values() if _spks["input_type"] == "spikes"]
+
+    out = []
+    sim_target = simulated_nodes(sim)
+    for spk in spks:
+        stim_target = resolve_node_set(circ, spk["node_set"])
+        source = resolve_node_set(circ, spk["source"])
+
+        A = sim_target.value_counts()
+        B = stim_target.value_counts()
+        target = (A & B).reset_index().set_index("count").loc[True].reset_index(drop=True)
+
+        s = pandas.read_csv(spk["spike_file"], sep="\s+").rename(columns={"/scatter": "node_id"})["node_id"]
+        out.append((s, source, target))
+    return out
 
 
 def input_innervation_from_matrix(spikes, matrix, gids_pre, t_win=None):
@@ -45,21 +64,10 @@ def input_innervation_from_matrix(spikes, matrix, gids_pre, t_win=None):
     return innervation
 
 
-def _input_innervation(sim, stim, t_win=None):
+def _input_innervation(circ, s, source, target, t_win=None):
     from .connection_matrix import circuit_node_set_matrix
-    from .sonata_helpers import simulated_nodes, resolve_node_set
-
-    circ = sim.circuit
-    sim_target = simulated_nodes(sim)
-    stim_target = resolve_node_set(circ, stim["node_set"])
-    source = resolve_node_set(circ, stim["source"])
-
-    A = sim_target.value_counts()
-    B = stim_target.value_counts()
-    target = (A & B).reset_index().set_index("count").loc[True].reset_index(drop=True)
 
     sM, src, tgt = circuit_node_set_matrix(circ, source, target)
-    s = pandas.read_csv(stim["spike_file"], sep="\s+").rename(columns={"/scatter": "node_id"})["node_id"]
     res = input_innervation_from_matrix(s, sM, src["node_ids"].values, t_win=t_win)
     if t_win is None:
         tgt["input_spike_count"] = res
@@ -86,15 +94,15 @@ def input_innervation(sim, t_win=None, sum=True):
     Column names are either ["input_spike_count"] or the names of the time windows,
     if specified.
     """
-    spks = [_spks for _spks in sim.config["inputs"].values() if _spks["input_type"] == "spikes"]
+    spks = input_spikes(sim)
     if len(spks) == 0: return None
 
-    res = _input_innervation(sim, spks[0], t_win=t_win)
+    res = _input_innervation(sim, *spks[0], t_win=t_win)
     if sum:
         for spk in spks[1:]:
-            res = res.add(_input_innervation(sim, spk, t_win=t_win), fill_value=0)
+            res = res.add(_input_innervation(sim, *spk, t_win=t_win), fill_value=0)
     else:
         res = [res]
         for spk in spks[1:]:
-            res.append(_input_innervation(sim, spk, t_win=t_win))
+            res.append(_input_innervation(sim, *spk, t_win=t_win))
     return res
