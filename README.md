@@ -131,3 +131,8 @@ In the remainder of this document, I will simply provide an overview of all func
   - *ConnectivityMatrix*: High-level class that defines the connectivity of a population of neurons as well as the properties of the neurons. Provides access to multiple connectivity properties, such as strength or weight. Provides powerful filtering functions and generation of stochastic control samples. Best used with loader configs and analysis configs (see [this tutorial](configuration_files.md))
   - *TimeDependentMatrix*: Represents a ConnectivityMatrix where connection properties (weights) change over time.
   - *ConnectivityGroup*: Represents a group of ConnectivityMatrices that are subpopulations of a single larger population.
+
+## Acknowledgements & Funding
+The development of this software was supported by funding to the Blue Brain Project, a research center of the École polytechnique fédérale de Lausanne (EPFL), from the Swiss government’s ETH Board of the Swiss Federal Institutes of Technology.
+
+Copyright (c) 2023 Blue Brain Project / EPFL.
