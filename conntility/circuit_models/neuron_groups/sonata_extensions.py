@@ -20,8 +20,8 @@ def circuit_base_dir(circ):
 
 
 def atlas_dir(circ):
-    if STR_ATLAS_DIR in circ.config["components"]:
-        return circ.config["components"][STR_ATLAS_DIR]
+    if STR_ATLAS_DIR in circ.config["components"].get("provenance", {}):
+        return circ.config["components"]["provenance"][STR_ATLAS_DIR]
     else:
         circ_base = circuit_base_dir(circ)
         if circ_base is None: return None
