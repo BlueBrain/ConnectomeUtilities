@@ -173,7 +173,7 @@ def _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_p
 
 
 def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, population="default",
-                               edge_property=None, agg_func=None):
+                               edge_property=None, agg_func=None, load_full=False, **kwargs):
     """
     Returns the connection matrix encoded in a sonata h5 file for a subset of neurons.
     Input:
@@ -191,16 +191,23 @@ def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, population="defa
     Returns:
     scipy.sparse matrix of connectivity (or a dict of those if a list is passed as `agg_func`)
     """
-    h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
-
-    idx = numpy.array(gids)
     if gids_post is None:
         gids_post = gids
+    if load_full:
+        M = full_connection_matrix(sonata_fn, population=population, edge_property=edge_property,
+                                   agg_func=agg_func, **kwargs)
+        if isinstance(M, dict): return dict([(k, v.tocsr()[numpy.ix_(gids, gids_post)])
+                                             for k, v in M.items()])
+        return M.tocsr()[numpy.ix_(gids, gids_post)]
     if edge_property is not None:
         assert agg_func is not None, "When looking up connection properties, must provide an agg_func, such as mean"
-        return _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_property, agg_func)
-
+        return _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_property,
+                                             agg_func, **kwargs)
+    
+    h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
+    idx = numpy.array(gids)
     idx_post = numpy.array(gids_post)
+
     rv_index = pandas.Series(range(len(idx)), index=idx)
     N = len(gids)
     M = len(gids_post)
@@ -222,7 +229,7 @@ def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, population="defa
 
 def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, for_gids_post=None,
                               edge_population=None, node_population=None,
-                              edge_property=None, agg_func=None, chunk=50000000):
+                              edge_property=None, agg_func=None, chunk=50000000, load_full=False):
     """
     Returns a structural connection matrix, either for an entire circuit, or a subset of neurons.
     For either local connectivity or any projection. 
@@ -269,7 +276,7 @@ def circuit_connection_matrix(circ, connectome=LOCAL_CONNECTOME, for_gids=None, 
         return full_connection_matrix(conn_file, edge_property=edge_property, agg_func=agg_func, shape=shape,
                                       population=edge_population, chunk=chunk)
     return connection_matrix_for_gids(conn_file, for_gids, gids_post=for_gids_post, population=edge_population,
-                                      edge_property=edge_property, agg_func=agg_func)
+                                      edge_property=edge_property, agg_func=agg_func, load_full=load_full, chunk=chunk)
 
 
 def circuit_node_set_matrix(circ, for_node_set, for_node_set_post=None):

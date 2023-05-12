@@ -657,14 +657,24 @@ class ConnectivityMatrix(object):
                                        node_population=circ.edges[connectome].target.name)
                 mat = circuit_connection_matrix(circ, for_gids=nrn_pre.index.values,
                                                 for_gids_post=nrn_post.index.values,
-                                                connectome=connectome, **kwargs).tocoo()
-                _shape = (np.sum(mat.shape), np.sum(mat.shape))
-                mat = sparse.coo_matrix((mat.data, (mat.row, mat.col + mat.shape[0])), shape=_shape)
+                                                connectome=connectome, **kwargs)
+                if isinstance(mat, dict):
+                    mat = dict([(str(k), v.tocoo()) for k, v in mat.items()])
+                    edge_prop_df = pd.DataFrame(dict([(k, v.data) for k, v in mat.items()]))
+                    mat = mat[list(mat.keys())[0]]
+                else:
+                    mat = mat.tocoo()
+                    edge_prop_df = pd.DataFrame({"data": mat.data})
+                    
+                edge_idx_df = pd.DataFrame({
+                    "row": mat.row, "col": mat.col + mat.shape[0]
+                })
                 nrn = pd.concat([nrn_pre, nrn_post], axis=0,
                                  keys=["Source", "Target"],
                                  names=["connection"]).droplevel(1).reset_index()
                 nrn.index.name="local_ids"
-                return cls(mat, vertex_properties=nrn)
+                return cls(edge_idx_df, vertex_properties=nrn, edge_properties=edge_prop_df,
+                           shape=(len(nrn), len(nrn)))
 
             nrn = load_filter(circ, load_config, node_population=circ.edges[connectome].source.name)
         else:
@@ -673,7 +683,19 @@ class ConnectivityMatrix(object):
         
         nrn = nrn.set_index(GID)
         mat = circuit_connection_matrix(circ, for_gids=nrn.index.values, connectome=connectome, **kwargs)
-        return cls(mat, vertex_properties=nrn)
+        if isinstance(mat, dict):
+            mat = dict([(str(k), v.tocoo()) for k, v in mat.items()])
+            edge_prop_df = pd.DataFrame(dict([(k, v.data) for k, v in mat.items()]))
+            mat = mat[list(mat.keys())[0]]
+        else:
+            mat = mat.tocoo()
+            edge_prop_df = pd.DataFrame({"data": mat.data})
+            
+        edge_idx_df = pd.DataFrame({
+            "row": mat.row, "col": mat.col
+        })
+
+        return cls(edge_idx_df, vertex_properties=nrn, edge_properties=edge_prop_df, shape=(len(nrn), len(nrn)))
 
     def submatrix(self, sub_gids, edge_property=None, sub_gids_post=None):
         """

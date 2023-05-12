@@ -8,14 +8,14 @@ from ..io.logging import get_logger
 
 LOG = get_logger("DECORATORS")
 
-def __submatrix_presyn__(matrix):
-    return lambda x: matrix[x.values]
+def __submatrix_presyn__(matrix, nrn):
+    return lambda x: (matrix[x.values], (nrn.iloc[x.values], nrn))
 
-def __submatrix_postsyn__(matrix):
-    return lambda x: matrix[:, x.values]
+def __submatrix_postsyn__(matrix, nrn):
+    return lambda x: (matrix[:, x.values], (nrn, nrn.iloc[x.values]))
 
-def __submatrix_population__(matrix):
-    return lambda x: matrix[numpy.ix_(x.values, x.values)]
+def __submatrix_population__(matrix, nrn):
+    return lambda x: (matrix[numpy.ix_(x.values, x.values)], nrn.iloc[x.values])
 
 
 def grouped_presyn_by_grouping_config(grp_cfg):
@@ -52,7 +52,7 @@ def _grouped_by_grouping_config(grp_cfg, submatrix_func):
             nrn_df = pandas.concat([nrn_df, pandas.Series(range(len(nrn_df)),
             index=nrn_df.index, name="__index__")], copy=False, axis=1)
             grouped = group_with_config(nrn_df, grp_cfg)
-            submatrices = grouped["__index__"].groupby(grouped.index.names).apply(submatrix_func(matrix))
+            submatrices = grouped["__index__"].groupby(grouped.index.names).apply(submatrix_func(matrix, nrn_df))
             idxx = grouped.index.to_frame().drop_duplicates()
             if isinstance(submatrices.index, pandas.MultiIndex):
                 colnames = idxx.columns
@@ -63,7 +63,7 @@ def _grouped_by_grouping_config(grp_cfg, submatrix_func):
                 out_index = pandas.Index(idxx, name=grouped.index.name)
 
             # TODO: Provide separate neuron dataframes for pre- and post-syn population
-            ret = [analysis_function(submatrices[ix], grouped.loc[ix], *args, **kwargs) for ix in idxx]
+            ret = [analysis_function(*submatrices[ix], *args, **kwargs) for ix in idxx]
             if numpy.all([isinstance(_res, pandas.Series) for _res in ret]):
                 ret = pandas.concat(ret, axis=0, keys=out_index, names=out_index.names, copy=False)
             else:
@@ -151,10 +151,10 @@ def _grouped_by_filtering_config(lst_fltr_cfg, matrix_func):
             index=nrn_df.index, name="__index__")], copy=False, axis=1)
             groups = [filter_with_config(nrn_df, fltr_cfg) for fltr_cfg in lst_fltr_cfg]
 
-            matrix_lo = matrix_func(matrix)
+            matrix_lo = matrix_func(matrix, nrn_df)
             ret = [analysis_function(
-                matrix_lo(grp["__index__"]),
-                grp, *args, **kwargs
+                *matrix_lo(grp["__index__"]),
+                *args, **kwargs
                 ) for grp in groups]
             if numpy.all([isinstance(_res, pandas.Series) for _res in ret]):
                 ret = pandas.concat(ret, axis=0, copy=False,
