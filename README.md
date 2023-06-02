@@ -4,6 +4,8 @@
 
 The purpose of Connectome Utilities is to simplify running topological analyses on detailed models of networks by providing a bridge between existing analyses and the model representation. The purpose is not to provide the analyses themselves, there are great existing packages and solutions for that. But to simplify their application to the case of complex, non-homogeneous networks associated with interdependent node and edge properties. This comes in the form of two types of functionality: First, loading complex connectomes into a reduced representation that still keeps salient details. Second, automate standard operations, such as extraction of specific subnetworks and generation of statistical controls.
 
+With respect to the first point, loading from [SONATA](https://github.com/BlueBrain/libsonata) models is provided. But once loaded, the representation is independent from Sonata and the second point provides utility also for non-Sonata networks.
+
 For illustration, we will provide some examples from the field of biologically detailed models of neural circuits, although the methods themselves could be useful in different fields and for more simplified neuronal networks as well.
 
 - [Example 1](examples/Examples%201%20and%202%20-%20Analyzing%20pathways%20and%20controls.ipynb): The network of a circuit model is to be analyzed, but the user wants to analyze the various neuron types separately, as it is known that their connectivities are very different. Connectome Utilities provides the automatic application of the same analysis to separate pathways and comparison of the results.
