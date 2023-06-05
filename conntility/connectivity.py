@@ -1373,7 +1373,7 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
             counts = counts.add(to_add.rename(columns={"t": "count"}), fill_value=0)
         counts["data"] = np.ones(len(self._edge_indices), dtype=bool)
         return ConnectivityMatrix(self._edge_indices, vertex_properties=self._vertex_properties,
-                                  edge_properties=counts, default_edge_property="count")
+                                  edge_properties=counts, default_edge_property="count", shape=self._shape)
     
     def amount_active(self):
         """
@@ -1397,7 +1397,7 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
         check = check.apply(counter, axis=1)
         counts.loc[check.index, "count"] = check
         return ConnectivityMatrix(self._edge_indices, vertex_properties=self._vertex_properties,
-                                  edge_properties=counts, default_edge_property="count")
+                                  edge_properties=counts, default_edge_property="count", shape=self._shape)
     
     def is_consistent(self):
         from scipy.spatial import distance
