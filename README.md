@@ -1,5 +1,7 @@
 # Connectome utilities
 
+![ConnectomeUtilities](banner-ConnectomeUtilities.jpg?raw=true)
+
 ## What is Connectome Utilities and what does it provide?
 
 The purpose of Connectome Utilities is to simplify running topological analyses on detailed models of networks by providing a bridge between existing analyses and the model representation. The purpose is not to provide the analyses themselves, there are great existing packages and solutions for that. But to simplify their application to the case of complex, non-homogeneous networks associated with interdependent node and edge properties. This comes in the form of two types of functionality: First, loading complex connectomes into a reduced representation that still keeps salient details. Second, automate standard operations, such as extraction of specific subnetworks and generation of statistical controls.
