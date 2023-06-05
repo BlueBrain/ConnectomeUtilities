@@ -20,6 +20,11 @@ For illustration, we will provide some examples from the field of biologically d
 
 - [Example 6](examples/Example%206%20-%20Plastic%20matrices.ipynb): A micro-scale network model is to be analyzed. But as it represent a neuronal network, it changes over time, due to plasticity. Connectome Utilities allows the representation and analysis of networks that change, both structurally or functionally (i.e. only the weights).
 
+### A Non-sonata based example
+- [Non-sonata Example](examples/C%20elegans%20-%20a%20non-sonata-based%20example.ipynb): This is an example of loading connectomics data not from a Sonata model, but instead from Excel file of connectivity of the worm at different developmental stages. Source of the data: [Witvliet et al., 2021](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8756380/) and wormatlas.org.
+
+### Summary
+
 In summary, when networks are more complex than just nodes and unweighted edges, more confounders have to be considered, and certain decisions have to be made during analysis. We provide the package that makes these decisions explicit and provides a sane default for them. Additionally, the package defines and uses a configuration file format formalizing analyses that combine any or all the complexities outlined above into a json file. This facilitates the reproduction of idendical analyses in different networks.
 
 The above is centered around a "ConnectivityMatrix" class and various derived classes, that provide a powerful and detailed representation of a complex network. It also provides save and load operations, enabling efficient data sharing. Some additional, independent functionality is provided:
