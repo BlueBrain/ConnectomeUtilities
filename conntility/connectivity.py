@@ -308,7 +308,7 @@ class _MatrixNeighborhoodIndexer(object):
             raise ValueError("Please provide a single vertex identifier or use the kwargs!")
         if len(args) == 1:
             arg = args[0]
-            if hasattr(arg, "__iter__"):
+            if hasattr(arg, "__iter__") and not isinstance(arg, str):
                 mats = [self.get_single(pre=_arg, post=_arg, center_first=center_first) for _arg in arg]
                 df = pd.DataFrame({"center": arg})
                 return ConnectivityGroup(df, mats)
