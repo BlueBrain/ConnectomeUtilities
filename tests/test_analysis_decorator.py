@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 from numpy.random.mtrand import RandomState
 import pandas
 import json

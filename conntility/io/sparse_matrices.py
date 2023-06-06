@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 import io
 import h5py
 import os

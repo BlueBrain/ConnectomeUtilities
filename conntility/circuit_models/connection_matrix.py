@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # For loading connectivity matrices
 import h5py
 import numpy

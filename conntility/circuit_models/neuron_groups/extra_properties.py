@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Functionality for adding additional columns to the DataFrame holding neuron information
 # That is: information that is not already easily available using Circuit.cells.get
 import pandas

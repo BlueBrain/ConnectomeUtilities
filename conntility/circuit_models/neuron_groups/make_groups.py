@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Functionality for defining groups of neurons according to their properties
 import numpy
 import pandas

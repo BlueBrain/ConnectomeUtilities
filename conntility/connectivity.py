@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Classes to get, save and load (static or time dependent) connection matrices and sample submatrices from them
 authors: Michael Reimann, András Ecker

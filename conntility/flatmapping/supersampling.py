@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 import pandas
 from ._supersample_utility import *
 from ._supersample_utility import _find_rotation_

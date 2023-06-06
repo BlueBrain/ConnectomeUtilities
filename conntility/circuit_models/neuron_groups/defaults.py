@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Defines a number of default file names, column names and other strings
 VIRTUAL_FIBERS_FN = "virtual-fibers.csv"
 

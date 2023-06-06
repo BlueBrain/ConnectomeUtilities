@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 from .flatmap_utility import colored_points_to_image, flat_region_image, flat_coordinates_of_regions, apply_flatmap_with_translation
 from .supersampling import supersample_flatmap, supersampled_locations
 from .supersampling import estimate_flatmap_pixel_size, per_pixel_coordinate_transformation, pandas_flat_coordinate_frame

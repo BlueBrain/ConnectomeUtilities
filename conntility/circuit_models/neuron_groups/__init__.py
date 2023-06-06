@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 from .make_groups import group_by_properties, group_by_grid, group_by_binned_properties
 from .loader import load_neurons, load_all_source_locations, load_all_target_locations
 from .loader import load_source_locations, load_target_locations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """
 Contributed by Vishal Sood
 Modified by Michael W. Reimann

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 import os, pandas
 
 from .defaults import VIRTUAL_FIBERS_FN

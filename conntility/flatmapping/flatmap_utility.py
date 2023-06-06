@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 import numpy
 
 from voxcell import VoxcellError

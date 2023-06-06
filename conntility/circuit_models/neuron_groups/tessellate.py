@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Functionality for tiling locations in a plane
 import logging
 

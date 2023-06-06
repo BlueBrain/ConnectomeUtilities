@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 # Functionality for loading information about neurons in a Circuit
 # Wrapper and additional functionality for Circuit.cells.get
 import numpy
