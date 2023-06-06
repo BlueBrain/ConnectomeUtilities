@@ -7,11 +7,11 @@ import bluepysnap as snap
 
 from conntility.circuit_models import neuron_groups as test_module
 
-CIRC_FN = "examples/data/circuit_config.json"
-CIRC = snap.Circuit(CIRC_FN)
-
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_DATA_DIR = os.path.join(TEST_DIR, "data")
+CIRC_FN = os.path.join(TEST_DATA_DIR, "circuit_config.json")
+
+CIRC = snap.Circuit(CIRC_FN)
 
 
 def test_load_neurons():
