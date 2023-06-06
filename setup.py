@@ -25,7 +25,11 @@ setup(name="Connectome utilities",
       download_url="",
       include_package_data=False,
       python_requires=">=3.8",
-      extras_require={},
+      extras_require={
+          "Diffusion_mapping": [
+              "mapalign @ git+https://github.com/satra/mapalign.git@master"
+              ]
+      },
       keywords=('computational neuroscience',
                 'modeling',
                 'analysis',

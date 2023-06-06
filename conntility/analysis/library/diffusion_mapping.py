@@ -3,8 +3,6 @@ import numpy
 from tqdm import tqdm
 from scipy.sparse import issparse
 
-from .embed import compute_diffusion_map # part of this repo. originally: https://github.com/satra/mapalign
-
 
 def similarity_matrix(C):
     """Turns a L x N connectivity matrix into a L x L similarity matrix. I.e. evaluates how similar the
@@ -47,6 +45,11 @@ def similarity_matrix(C):
 def embed_pathway(C, diffusion_time=1, n_components=3):
     """
     """
+    try:
+        from mapalign.embed import compute_diffusion_map
+    except ImportError:
+        raise RuntimeError("""This optional feature requires installation of the mapalign package.
+        Obtain it from https://github.com/satra/mapalign""")
     print("Calculating similarity...")
     S_norm = similarity_matrix(C)
     print("...done! Performing diffusion mapping...")
