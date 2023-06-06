@@ -1,2 +1,3 @@
   Michael W. Reimann (maintainer)
   Andras Ecker
+  Vishal Sood (contributor)
