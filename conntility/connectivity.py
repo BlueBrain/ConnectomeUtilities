@@ -747,17 +747,15 @@ class ConnectivityMatrix(object):
         assert np.all(np.in1d(subpop_ids, self._vertex_properties.index.values))
         subpop_idx = self._lookup[subpop_ids]
         # TODO: This would be more efficient if the underlying representation was csc.
-        # TODO: This fails if there are duplicate entries with the same row/col.
-        subindex = sparse.coo_matrix((range(len(self._edge_indices["row"])),
-                                    (self._edge_indices["row"], self._edge_indices["col"])),
-                                     copy=False, shape=self._shape).tocsc()
-        subindex = subindex[np.ix_(subpop_idx, subpop_idx)].tocoo()
-
-        out_edges = self._edges.iloc[subindex.data]
+        subpop_lookup = pd.Series(range(len(subpop_idx)), index=subpop_idx)
+        vld = self._edge_indices["row"].isin(subpop_idx) & self._edge_indices["col"].isin(subpop_idx)
+        out_edges = self._edges.loc[vld.values]
+        out_indices = self._edge_indices.loc[vld.values]
+        if len(out_indices) > 0: out_indices = out_indices.apply(lambda _x: subpop_lookup[_x].values, axis=0)
         out_vertices = self._vertex_properties.loc[subpop_ids]
-        # TODO: This will result in indices of _edge_indices and _edges by different.
-        # That is OK, because the indices are never used. But still, might want to revisit...
-        return ConnectivityMatrix(subindex.row, subindex.col, vertex_properties=out_vertices,
+        
+        return ConnectivityMatrix(out_indices,
+                                  vertex_properties=out_vertices,
                                   edge_properties=out_edges, default_edge_property=self._default_edge,
                                   shape=(len(subpop_ids), len(subpop_ids)))
     
