@@ -1,6 +1,23 @@
 # Connectome utilities
 
+Complex network representation and analysis layer
+
 ![ConnectomeUtilities](banner-ConnectomeUtilities.jpg?raw=true)
+# Table of Contents
+
+1. [What is Connectome Utilities?](#what-is-connectome-utilities-and-what-does-it-provide)
+    * [Usage with Sonata-based models](#usage-with-sonata-based-models)
+    * [A Non-sonata based example](#a-non-sonata-based-example)
+    * [Summary](#summary)
+2. [Installation](#installation)
+3. [Examples](#examples)
+4. [Further information](#further-information)
+    * [Contents and overview](#contents-and-overview)
+    * [Functionality](#functionality)
+    * [Defining analyses in .json configurations](configuration_files.md)
+5. [Contribution guidelines](CONTRIBUTING.md)
+6. [Citation](#citation)
+7. [Acknowledgements and Funding](#acknowledgements--funding)
 
 ## What is Connectome Utilities and what does it provide?
 
@@ -8,6 +25,7 @@ The purpose of Connectome Utilities is to simplify running topological analyses 
 
 With respect to the first point, loading from [SONATA](https://github.com/BlueBrain/libsonata) models is provided. But once loaded, the representation is independent from Sonata and the second point provides utility also for non-Sonata networks.
 
+### Usage with Sonata-based models
 For illustration, we will provide some examples from the field of biologically detailed models of neural circuits, although the methods themselves could be useful in different fields and for more simplified neuronal networks as well.
 
 - [Example 1](examples/Examples%201%20and%202%20-%20Analyzing%20pathways%20and%20controls.ipynb): The network of a circuit model is to be analyzed, but the user wants to analyze the various neuron types separately, as it is known that their connectivities are very different. Connectome Utilities provides the automatic application of the same analysis to separate pathways and comparison of the results.
@@ -35,9 +53,20 @@ The above is centered around a "ConnectivityMatrix" class and various derived cl
 - Functionality to represent connectivity at multiple spatial scales simultaneously.
 - Functionality to rapidly calculate path distances between synapses on a neuronal morphology in a Sonata model.
 
+## Installation
+Simply run 
+  > pip install .
 
+All dependencies are declared in the setup.py and are available from [pypi](https://pypi.org/)
 
-## Contents and Overview
+The package can then imported as "conntility".
+See the various exemplary notebooks for more details.
+
+## Examples
+Usage examples can be found in the jupyter notebooks listed [above](#usage-with-sonata-based-models)
+
+## Further information
+### Contents and Overview
 
   - circuit_models: Provides data loaders on top of bluepy to load data specific to 
   BlueBrain models in sonata format.
@@ -74,11 +103,8 @@ The above is centered around a "ConnectivityMatrix" class and various derived cl
   i.e. the actual underlying matrices are only loaded when they are first actually accessed.
   This can be useful if you are only interested in a small number of the matrices in the Series.
 
-### Installation
-Simply run "pip install ."
-Can then imported as "conntility".
 
-### Using it
+### Functionality
 We can conceptually split a connectivity analysis into several parts:
   - **Loading neurons**: Start by looking up the neurons in a circuit model and their properties
   - **Filtering neurons**: Next, find the neurons you are really interested in by filtering out the uninteresting ones.
@@ -140,6 +166,24 @@ In the remainder of this document, I will simply provide an overview of all func
   - *ConnectivityMatrix*: High-level class that defines the connectivity of a population of neurons as well as the properties of the neurons. Provides access to multiple connectivity properties, such as strength or weight. Provides powerful filtering functions and generation of stochastic control samples. Best used with loader configs and analysis configs (see [this tutorial](configuration_files.md))
   - *TimeDependentMatrix*: Represents a ConnectivityMatrix where connection properties (weights) change over time.
   - *ConnectivityGroup*: Represents a group of ConnectivityMatrices that are subpopulations of a single larger population.
+
+## Citation
+If you use this software, kindly use the following BIBTEX entry for citation:
+
+```
+@article {Isbister2023.05.17.541168,
+	author = {James B. Isbister and Andr{\'a}s Ecker and Christoph Pokorny and Sirio Bola{\~n}os-Puchet and Daniela Egas Santander and Alexis Arnaudon and Omar Awile and Natali Barros-Zulaica and Jorge Blanco Alonso and Elvis Boci and Giuseppe Chindemi and Jean-Denis Courcol and Tanguy Damart and Thomas Delemontex and Alexander Dietz and Gianluca Ficarelli and Mike Gevaert and Joni Herttuainen and Genrich Ivaska and Weina Ji and Daniel Keller and James King and Pramod Kumbhar and Samuel Lapere and Polina Litvak and Darshan Mandge and Eilif B. Muller and Fernando Pereira and Judit Planas and Rajnish Ranjan and Maria Reva and Armando Romani and Christian R{\"o}ssert and Felix Sch{\"u}rmann and Vishal Sood and Aleksandra Teska and Anil Tuncel and Werner Van Geit and Matthias Wolf and Henry Markram and Srikanth Ramaswamy and Michael W. Reimann},
+	title = {Modeling and Simulation of Neocortical Micro- and Mesocircuitry. Part II: Physiology and Experimentation},
+	elocation-id = {2023.05.17.541168},
+	year = {2023},
+	doi = {10.1101/2023.05.17.541168},
+	publisher = {Cold Spring Harbor Laboratory},
+	\
+	URL = {https://www.biorxiv.org/content/early/2023/05/23/2023.05.17.541168},
+	eprint = {https://www.biorxiv.org/content/early/2023/05/23/2023.05.17.541168.full.pdf},
+	journal = {bioRxiv}
+}
+```
 
 ## Acknowledgements & Funding
 The development of this software was supported by funding to the Blue Brain Project, a research center of the École polytechnique fédérale de Lausanne (EPFL), from the Swiss government’s ETH Board of the Swiss Federal Institutes of Technology.
