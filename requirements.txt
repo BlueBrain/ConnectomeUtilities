@@ -7,3 +7,5 @@ tqdm>=4.50.0
 lazy>=1.4
 scikit-learn>=1.0
 libsonata>=0.1.10
+bluepysnap>=1.0.0
+voxcell
