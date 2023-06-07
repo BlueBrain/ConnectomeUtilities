@@ -2,7 +2,10 @@
 
 Complex network representation and analysis layer
 
+[![DOI](https://zenodo.org/badge/641456590.svg)](https://zenodo.org/badge/latestdoi/641456590)
+
 ![ConnectomeUtilities](banner-ConnectomeUtilities.jpg?raw=true)
+
 # Table of Contents
 
 1. [What is Connectome Utilities?](#what-is-connectome-utilities-and-what-does-it-provide)
