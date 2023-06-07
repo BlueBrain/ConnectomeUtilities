@@ -40,8 +40,10 @@ For illustration, we will provide some examples from the field of biologically d
 
 - [Example 6](examples/Example%206%20-%20Plastic%20matrices.ipynb): A micro-scale network model is to be analyzed. But as it represents a neuronal network, it changes over time, due to plasticity. Connectome Utilities allows the representation and analysis of networks that change, both structurally or functionally (i.e. only the weights).
 
-### A Non-sonata based example
-- [Non-sonata Example](examples/C%20elegans%20-%20a%20non-sonata-based%20example.ipynb): This is an example of loading connectomics data not from a Sonata model, but instead from an Excel file of the connectivity of the worm at different developmental stages. Source of the data: [Witvliet et al., 2021](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8756380/) and wormatlas.org.
+### Non-sonata based examples
+- [Non-sonata Example 1](examples/C%20elegans%20-%20a%20non-sonata-based%20example.ipynb): This is an example of loading connectomics data not from a Sonata model, but instead from an Excel file of the connectivity of the worm at different developmental stages. Source of the data: [Witvliet et al., 2021](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8756380/) and wormatlas.org. The input data is not included in this repository, but instructions on how to download it are given in the notebook.
+
+- [Non-sonata Example 2](examples/Fly%20connectome%20-%20a%20non-sonata%20based%20example.ipynb): This is another example of loading connectomics data not from a Sonata model. It loads R-formatted (.rds) data on Drosophila connectivity. Source of the data: [Mehta et al., 2023](https://direct.mit.edu/netn/article/7/1/269/113338/Circuit-analysis-of-the-Drosophila-brain-using). The input data is not included in this repository, but instructions on how to download it are given in the notebook.
 
 ### Summary
 
