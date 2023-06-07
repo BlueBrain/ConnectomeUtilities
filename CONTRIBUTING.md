@@ -1,6 +1,6 @@
 # Contribution Guide
 
-We would love for you to contribute to the ConnectomeeUtilities project and help make it better than it is today.
+We would love for you to contribute to the ConnectomeUtilities project and help make it better than it is today.
 As a contributor, here are the guidelines we would like you to follow:
 
  - [Question or Problem?](#got-a-question)
