@@ -30,28 +30,28 @@ For illustration, we will provide some examples from the field of biologically d
 
 - [Example 1](examples/Examples%201%20and%202%20-%20Analyzing%20pathways%20and%20controls.ipynb): The network of a circuit model is to be analyzed, but the user wants to analyze the various neuron types separately, as it is known that their connectivities are very different. Connectome Utilities provides the automatic application of the same analysis to separate pathways and comparison of the results.
 
-- [Example 2](examples/Examples%201%20and%202%20-%20Analyzing%20pathways%20and%20controls.ipynb): A subnetwork of neurons has been identified in the network. The user found that its connectivity is "non-random" with respect to a metric.  But can it be explained by considering a more complex baseline model? Connectome Utilities handles the generation of complex control models, application of analyses and comparison of results. Note that (like the analyses) the control connectivity model needs to be user provided, but Connectome Utilities simplifies its execution and analysis.
+- [Example 2](examples/Examples%201%20and%202%20-%20Analyzing%20pathways%20and%20controls.ipynb): A subnetwork of neurons has been identified in the network. The user found that its connectivity is "non-random" with respect to a metric.  But can it be explained by considering a more complex baseline model? Connectome Utilities handles the generation of complex control models, application of analyses, and comparison of results. Note that (like the analyses) the control connectivity model needs to be user-provided, but Connectome Utilities simplifies its execution and analysis.
 
-- [Example 3](examples/Example%203%20-%20Generating%20control%20subsamples%20and%20neighborhoods.ipynb): Building on the previous example, the user found that the non-random connectivity trend cannot be explained by complex controls. It is possible that the non-random aspect be explained by the neuronal composition of the subnetwork, e.g. it may be biased towards sampling interneurons. Alternatively, it can be more deeply rooted. To decide this, Connectome Utilities provides the sampling of random control subnetworks from the base network with the same distribution of neuron types as the original sample, or the same distribution of neuron locations. It also facilities running the same analysis on the data and controls and comparing their results.
+- [Example 3](examples/Example%203%20-%20Generating%20control%20subsamples%20and%20neighborhoods.ipynb): Building on the previous example, the user found that the non-random connectivity trend cannot be explained by complex controls. It is possible that the non-random aspect be explained by the neuronal composition of the subnetwork, e.g. it may be biased towards sampling interneurons. Alternatively, it can be more deeply rooted. To decide this, Connectome Utilities provides the sampling of random control subnetworks from the base network with the same distribution of neuron types as the original sample or the same distribution of neuron locations. It also facilities running the same analysis on the data and controls and comparing their results.
 
-- [Example 4](examples/Example%204%20-%20Loading%20atlas%20data.ipynb): A large network model is to be analyzed. The user wants to analyze it in the spatial context provided by voxelized brain atlas, e.g. are connections more common within than across regions? Connectome Utilities provides loading data from brain atlases and cross-referencing them with network models.
+- [Example 4](examples/Example%204%20-%20Loading%20atlas%20data.ipynb): A large network model is to be analyzed. The user wants to analyze it in the spatial context provided by the voxelized brain atlas, e.g. are connections more common within than across regions? Connectome Utilities provides loading data from brain atlases and cross-referencing them with network models.
 
 - [Example 5](examples/Example%205%20-%20Connectivity%20at%20reduced%20resolution.ipynb): A large micro-scale network model has been loaded that exists in a spatial context. The user wants to know what the network looks like at reduced resolution, such as the voxelized meso-scale, or pathways between layers. Connectome Utilities provides easy partition of networks according to spatial or other properties and generation of (reduced scale) quotient graphs. 
 
-- [Example 6](examples/Example%206%20-%20Plastic%20matrices.ipynb): A micro-scale network model is to be analyzed. But as it represent a neuronal network, it changes over time, due to plasticity. Connectome Utilities allows the representation and analysis of networks that change, both structurally or functionally (i.e. only the weights).
+- [Example 6](examples/Example%206%20-%20Plastic%20matrices.ipynb): A micro-scale network model is to be analyzed. But as it represents a neuronal network, it changes over time, due to plasticity. Connectome Utilities allows the representation and analysis of networks that change, both structurally or functionally (i.e. only the weights).
 
 ### A Non-sonata based example
-- [Non-sonata Example](examples/C%20elegans%20-%20a%20non-sonata-based%20example.ipynb): This is an example of loading connectomics data not from a Sonata model, but instead from Excel file of connectivity of the worm at different developmental stages. Source of the data: [Witvliet et al., 2021](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8756380/) and wormatlas.org.
+- [Non-sonata Example](examples/C%20elegans%20-%20a%20non-sonata-based%20example.ipynb): This is an example of loading connectomics data not from a Sonata model, but instead from an Excel file of the connectivity of the worm at different developmental stages. Source of the data: [Witvliet et al., 2021](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8756380/) and wormatlas.org.
 
 ### Summary
 
-In summary, when networks are more complex than just nodes and unweighted edges, more confounders have to be considered, and certain decisions have to be made during analysis. We provide the package that makes these decisions explicit and provides a sane default for them. Additionally, the package defines and uses a configuration file format formalizing analyses that combine any or all the complexities outlined above into a json file. This facilitates the reproduction of idendical analyses in different networks.
+In summary, when networks are more complex than just nodes and unweighted edges, more confounders have to be considered, and certain decisions have to be made during analysis. We provide the package that makes these decisions explicit and provides a sane default for them. Additionally, the package defines and uses a configuration file format formalizing analyses that combine any or all the complexities outlined above into a json file. This facilitates the reproduction of identical analyses in different networks.
 
 The above is centered around a "ConnectivityMatrix" class and various derived classes, that provide a powerful and detailed representation of a complex network. It also provides save and load operations, enabling efficient data sharing. Some additional, independent functionality is provided:
 
 - Functionality to extract the representation of topographical mapping of cortical connectivity, as parameterized in the [BBP "White Matter" project](github.com/BlueBrain/Long-range-micro-connectome).
 - Functionality to represent connectivity at multiple spatial scales simultaneously.
-- Functionality to rapidly calculate path distances between synapses on a neuronal morphology in a Sonata model.
+- Functionality to rapidly calculate path distances between synapses on neuronal morphology in a Sonata model.
 
 ## Installation
 Simply run 
@@ -59,7 +59,7 @@ Simply run
 
 All dependencies are declared in the setup.py and are available from [pypi](https://pypi.org/)
 
-The package can then imported as "conntility".
+The package can then be imported as "conntility".
 See the various exemplary notebooks for more details.
 
 ## Examples
@@ -70,7 +70,7 @@ Usage examples can be found in the jupyter notebooks listed [above](#usage-with-
 
   - circuit_models: Provides data loaders on top of bluepy to load data specific to 
   BlueBrain models in sonata format.
-    - circuit_models.neuron_groups: Provies utility to load the properties of neurons in
+    - circuit_models.neuron_groups: Provides utility to load the properties of neurons in
     a circuit model, and group them according to various schemes:
       - by values of their properties (by etype, layer, mtype...)
       - by binned values of their properties (by coordinates)
@@ -91,10 +91,10 @@ Usage examples can be found in the jupyter notebooks listed [above](#usage-with-
   and comparing it to random controls.
 
   - flatmapping: Provides functionality on top of existing flat maps. That is, it does NOT
-  provide the ability to create flat map volumes, but to get more out existing flat maps.
+  provide the ability to create flat map volumes, but to get more out of existing flat maps.
   This begins with creating "region images", i.e. images of flattened versions of a circuit,
-  colored by region identity and extends to supersampling a flat map, i.e. going beyond its
-  pixel resolution and even turning these arbitrary pixel coordinates into a um-based
+  colored by region identity, and extends to supersampling a flat map, i.e. going beyond its
+  pixel resolution and even turning these arbitrary pixel coordinates into an um-based
   coordinate system.
 
   - io: Provides functionality to save / load multiple connection matrices into a single hdf5
@@ -116,18 +116,18 @@ We can conceptually split a connectivity analysis into several parts:
 
 conntility provides python functions to simplify and standardize any of these steps. 
 
-To enable flexible, reproducable and re-usable analyses, some of the functionality must be parameterized through the use of .json formatted configuration files. To understand their format and how to use them, refer to [this documentation](configuration_files.md). In that document, I will walk you through a number of use cases and explain the contents of the configurations along the way.
+To enable flexible, reproducible, and re-usable analyses, some of the functionality must be parameterized through the use of .json formatted configuration files. To understand their format and how to use them, refer to [this documentation](configuration_files.md). In that document, I will walk you through a number of use cases and explain the contents of the configurations along the way.
 
 In the remainder of this document, I will simply provide an overview of all functions and their purpose.
 
   - circuit_models: For interacting with and loading from circuit models
     - neuron_groups: Loading neuron properties from SONATA circuits and defining groups or subsets of them
-      - *load_neurons*: Load specified neurons and return their properties in a DataFrame. In addition to basic properties (accessed through bluepy), it provides flatmapped locations, supersampled flat locations, any property in a volumetric atlas. 
+      - *load_neurons*: Load specified neurons and return their properties in a DataFrame. In addition to basic properties (accessed through bluepy), it provides flatmapped locations, supersampled flat locations, and any property in a volumetric atlas. 
       - *load_projection_locations*: Same, but for projection fibers. For a single specified projection.
       - *load_all_projection_locations*: Same, loads all projections existing in a Circuit model
       - *group_by_properties*: Define a group of neurons based on structural properties
       - *group_by_binned_properties*:  Same, but for numerical values (they are binned)
-      - *group_by_grid*: Group by spatial locations, splitting space into hexagonal, triangular or rhombic grids
+      - *group_by_grid*: Group by spatial locations, splitting space into hexagonal, triangular, or rhombic grids
     
       - *load_filter*: Access to neuron property loading (see above), configured through a .json config
       - *load_group_filter*: Same, but including access to the grouping functionality
@@ -144,12 +144,12 @@ In the remainder of this document, I will simply provide an overview of all func
     - *circuit_matrix_between_groups*: Uses the grouping functionality mentioned above: Count the number of connections between specified groups of neurons.
 
 - *flatmapping*: Tools to get more out of flat maps. Mostly supersampling
-  - *flat_region_image*: Simple utility to generate a RGB image (N x M x 3 numpy.array) of a flat view of a model with regions in different colors.
-  - *apply_flatmap_with_translation*: Simple utility that helps with looking up flat locations of projection fibers: Since they are placed outside the volume a direct lookup is impossible, so they will translated along their direction vectors until they hit the mapped volume.
+  - *flat_region_image*: Simple utility to generate an RGB image (N x M x 3 numpy.array) of a flat view of a model with regions in different colors.
+  - *apply_flatmap_with_translation*: Simple utility that helps with looking up flat locations of projection fibers: Since they are placed outside the volume a direct lookup is impossible, so they will be translated along their direction vectors until they hit the mapped volume.
   - *supersample_flatmap*: Return a copy of a flat map where the locations are no longer integer valued, but in floating point micrometers. That is, each voxel is associated with a flat location in um.
   - *supersampled_locations*: Supersamples (and transforms to um) the flat location of any 3d point or array of 3d points.
   - *estimate_flatmap_pixel_size*: Helper function to estimate the approximate size (in um) that corresponds to a single flatmap pixel.
-  - *per_pixel_coordinate_transformation*: Very technical helper that provides access to intermediate coordinate system between the original 3d coordinates and the supersampled flat coordinates, such as local coordinates "within" each pixel.
+  - *per_pixel_coordinate_transformation*: Very technical helper that provides access to the intermediate coordinate system between the original 3d coordinates and the supersampled flat coordinates, such as local coordinates "within" each pixel.
 
 - *io*: Input/Output
   - *logging*: Centralized logger for this package
@@ -158,8 +158,8 @@ In the remainder of this document, I will simply provide an overview of all func
 
 - *analysis*: Making it easier / faster / better reproducible to apply connectivity analyses
   - *Analysis*: A class instantiating a single connectivity analysis. Can import the analysis dynamically from any file at runtime. Configured through a .json config file. For details, see [this tutorial](configuration_files.md).
-  - *get_analyses*: Helper to rapidly read a number of analyses defined in a config.
-  - *library*: In principle, individual atomic analyses are not supposed to be in this repository. But I put it here temporarilily until it is adopted by a different repo.
+  - *get_analyses*: Helper to rapidly read a number of analyses defined in config.
+  - *library*: In principle, individual atomic analyses are not supposed to be in this repository. But I put it here temporarily until it is adopted by a different repo.
     - *embed_pathway*: Perform diffusion embedding on a connection matrix (weighted or unweighted, sparse or dense).
   - *analysis_decorators*: Decorators to turn atomic analysis of a connection matrix into more powerful ones. For details, see [this tutorial](configuration_files.md).
 
