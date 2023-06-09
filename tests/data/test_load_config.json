@@ -1,31 +1,26 @@
 {
-    "loading": {
-        "base_target": "hex_O1", 
-        "properties": ["x", "y", "z", "etype", "mtype", "layer", "ss_flat_x", "ss_flat_y"]
+    "loading": { 
+        "properties": ["x", "y", "z", "layer", "model_type"]
         },
     "filtering": [
         {
-            "column": "etype",
-            "values": ["bNAC", "cNAC"]
+            "column": "model_type",
+            "values": ["biophysical"]
         },
         {
-            "column": "layer",
-            "value": 1
-        },
-        {
-            "column": "ss_flat_x",
-            "interval": [1000, 1500]
+            "column": "z",
+            "interval": [0, 500]
         }
     ],
     "grouping": [
         {
             "method": "group_by_grid",
-            "columns": ["ss_flat_x", "ss_flat_y"],
-            "args": [100]
+            "columns": ["x", "y"],
+            "args": [150]
         },
         {
             "method": "group_by_properties",
-            "columns": ["mtype"]
+            "columns": ["layer"]
         }
     ]
 }

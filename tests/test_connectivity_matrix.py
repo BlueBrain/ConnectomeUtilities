@@ -8,11 +8,10 @@ import bluepysnap as snap
 from scipy import sparse
 from conntility import connectivity as test_module
 
+from utils import get_snap_test_circuit
+
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_DATA_DIR = os.path.join(TEST_DIR, "data")
-CIRC_FN = os.path.join(TEST_DATA_DIR, "circuit_config.json")
-
-CIRC = snap.Circuit(CIRC_FN)
 
 numpy.random.seed(123)
 m_dense = numpy.random.rand(10, 10) < 0.1
@@ -27,17 +26,18 @@ props = pandas.DataFrame({
 def test_from_bluepy():
     load_cfg = {
         "loading": {
-            "base_target": "Layer4", 
-            "properties": ["x", "y", "z", "etype", "layer"]
+            "properties": ["x", "y", "z", "morphology", "layer"]
             },
-            "filtering": {"column": "etype", "value": "bIR"}
+            "filtering": {"column": "layer", "value": 6}
             }
-    M = test_module.ConnectivityMatrix.from_bluepy(CIRC, load_config=load_cfg,
-                                                   connectome="S1nonbarrel_neurons__S1nonbarrel_neurons__chemical")
-    ue = numpy.unique(M.etype)
-    ul = numpy.unique(M.layer)
-    assert len(ue) == 1 and ue[0] == "bIR"
-    assert len(ul) == 1 and ul[0] == 4
+    with get_snap_test_circuit() as circ_fn:
+        CIRC = snap.Circuit(circ_fn)
+        M = test_module.ConnectivityMatrix.from_bluepy(CIRC, load_config=load_cfg,
+                                                       connectome="default")
+        um = numpy.unique(M.morphology)
+        ul = numpy.unique(M.layer)
+        assert len(um) > 1 and um[0].startswith("morph")
+        assert len(ul) == 1 and ul[0] == 6
 
 def test_base_connectivity_matrix():
     M = test_module.ConnectivityMatrix(m_sparse, vertex_properties=props)
