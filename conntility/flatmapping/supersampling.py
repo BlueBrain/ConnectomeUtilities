@@ -131,7 +131,7 @@ def supersample_flatmap(fm, orient, pixel_sz=34.0, include_depth=False):
 
 
 def supersampled_locations(df_in, columns_xyz, columns_uvw=None, columns_out=None,
-                           circ=None, fm=None, orient=None, pixel_sz=34.0,
+                           circ=None, fm=None, orient=None, pixel_sz=34.0,  #TODO: use DEFAULT_PIXEL_SZ
                            column_index=None, include_depth=False):
     from ..circuit_models.neuron_groups.sonata_extensions import load_atlas_data
     if circ is None:

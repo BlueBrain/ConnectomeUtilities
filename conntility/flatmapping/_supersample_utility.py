@@ -71,7 +71,7 @@ class Projection(object):
         return other[:, self._idx]
 
 
-class TwoDRotation(object):
+class GeneralLinearTransform(object):
     def __init__(self, M):
         self._M = M
 
@@ -79,7 +79,7 @@ class TwoDRotation(object):
         return numpy.dot(self._M, other.transpose()).transpose()
 
     def inv(self):
-        return TwoDRotation(self._M.transpose())
+        return GeneralLinearTransform(self._M.transpose())
 
     def expand(self):
         Mout = numpy.array([
@@ -87,7 +87,7 @@ class TwoDRotation(object):
             [0, 1, 0],
             [self._M[1, 0], 0, self._M[1, 1]]
         ])
-        return Rotation.from_matrix(Mout)
+        return GeneralLinearTransform(Mout) #Rotation.from_matrix(Mout)
 
 
 class Combination(object):
@@ -124,7 +124,7 @@ def flatmap_pixel_gradient(fm_or_frame):
 def _find_rotation_(v_x, v_y):
     if numpy.any(numpy.isnan(v_x)):
         if numpy.any(numpy.isnan(v_y)):
-            return TwoDRotation(numpy.identity(2)), 2.0
+            return GeneralLinearTransform(numpy.identity(2)), 2.0
         vv = numpy.hstack([v_y, [[0]]])
         vtgt = numpy.array([[0, 1, 0]])
     elif numpy.any(numpy.isnan(v_y)):
@@ -136,4 +136,4 @@ def _find_rotation_(v_x, v_y):
     vv = vv / numpy.linalg.norm(vv, axis=1, keepdims=True)
     res = Rotation.align_vectors(vtgt, vv)
     M = res[0].as_matrix()
-    return TwoDRotation(M[:2, :2]), res[1]
+    return GeneralLinearTransform(M[:2, :2]), res[1]
