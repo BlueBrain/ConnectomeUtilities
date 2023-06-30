@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Connectome-Utilities"
+version = "0.3.1"
+authors = [
+  { name="Blue Brain Project, EPFL", email="conntility.645co@simplelogin.com" },
+]
+description = "Complex network representation and analysis layer"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+]
+dependencies = ["numpy>=1.20.0",
+                "h5py>=3.6.0",
+                "pandas>=2.0.0",
+                "tables>=3.6",
+                "scipy>=1.8.0",
+                "tqdm>=4.50.0",
+                "lazy>=1.4",
+                "scikit-learn",
+                "libsonata>=0.1.10",
+                "bluepysnap>=1.0.0",
+                "voxcell"]
+
+[project.urls]
+"Homepage" = "https://github.com/BlueBrain/ConnectomeUtilities"
+"Bug Tracker" = "https://github.com/BlueBrain/ConnectomeUtilities/issues"
+
+[tool.setuptools]
+packages = ["conntility"]
