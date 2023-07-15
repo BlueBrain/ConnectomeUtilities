@@ -1477,14 +1477,18 @@ class StructurallyPlasticMatrix(ConnectivityMatrix):
 
 
 class TimeDependentMatrix(ConnectivityMatrix):
-    """Utility class to get, save, load and hold a time dependent weighted connections matrices"""
+    """
+    A version of ConnectivityMatrix for connectivity that changes over time functionally, i.e.
+    unlike for `StructurallyPlasticMatrix` the presence and absence of edges remains fixed,
+    but their efficacy (or weight) may change.
+    """
     def __init__(self, *args, vertex_labels=None, vertex_properties=None,
                  edge_properties=None, default_edge_property=None, shape=None):
         """Not too intuitive init - please see `from_report()` below"""
         if len(args) == 1 and isinstance(args[0], np.ndarray) or isinstance(args[0], sparse.spmatrix):
             raise ValueError("TimeDependentMatrix can only be initialized by edge indices and edge properties")
         if isinstance(edge_properties, dict):
-            assert np.all([x.columns.dtype==float for x in edge_properties.values()]),\
+            assert np.all([x.columns.dtype == float for x in edge_properties.values()]),\
                  "Index of edge properties must be a float Index"
             edge_properties = pd.concat(edge_properties.values(), keys=edge_properties.keys(), names=["name"], axis=1)
             edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])
@@ -1492,31 +1496,38 @@ class TimeDependentMatrix(ConnectivityMatrix):
             assert isinstance(edge_properties, pd.DataFrame)
             if isinstance(edge_properties.columns, pd.MultiIndex):
                 assert len(edge_properties.columns.levels) == 2, "Columns must index time and name"
-                if not edge_properties.columns.levels[0].dtype==float:
-                    assert edge_properties.columns.levels[1].dtype==float,\
+                if not edge_properties.columns.levels[0].dtype == float:
+                    assert edge_properties.columns.levels[1].dtype == float,\
                         "Time index must be of type float Index"
                     edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])
                 else:
-                    assert edge_properties.columns.levels[0].dtype==float,\
+                    assert edge_properties.columns.levels[0].dtype == float,\
                         "Time index must be of type float Index"
             else:
-                assert edge_properties.columns.dtype==float,\
+                assert edge_properties.columns.dtype == float,\
                         "Time index must be of type Float64Index"
-                edge_properties = pd.concat([edge_properties], axis=1, copy=False, keys=["data"], names=["name"])
+                edge_properties = pd.concat([edge_properties], axis=1, copy=False, keys=["agg_fn"], names=["name"])
                 edge_properties.columns = edge_properties.columns.reorder_levels([1, 0])
         if default_edge_property is None:
             default_edge_property = edge_properties.columns.levels[1][0]
-        self._time = edge_properties.columns.levels[0].min()
+        self._times = np.unique(edge_properties.columns.get_level_values("time").to_numpy())
+        self._time = self._times.min()
         super().__init__(*args, vertex_labels=vertex_labels, vertex_properties=vertex_properties,
                          edge_properties=edge_properties, default_edge_property=default_edge_property, shape=shape)
-    
+
+    @property
+    def times(self):
+        return self._times
+
     @property
     def edges(self):
         return self._edges[self._time]
     
     def at_time(self, new_time):
         # TODO: Add a copy=True kwarg that acts like in .default
-        if new_time not in self._edges:
+        if new_time == -1:
+            new_time = self._times.max()
+        if new_time not in self._times:
             raise ValueError("No time point at {0} given".format(new_time))  # TODO: interpolate to nearest point?
         self._time = new_time
         return self
@@ -1533,7 +1544,7 @@ class TimeDependentMatrix(ConnectivityMatrix):
     def from_report(cls, sim, report_cfg, load_cfg=None, presyn_mapping=None):
         """
         A sonata synapse (compartment) report based constructor
-        :param sim: bluepysnap Simulation object
+        :param sim: `bluepysnap.Simulation` object
         :param report_cfg: config dict with report's name, time steps to load,
                            static property name to look up for synapses that aren't reported,
                            and optionally the names of the aggregation functions to use
@@ -1545,7 +1556,55 @@ class TimeDependentMatrix(ConnectivityMatrix):
                                        None (default) in which case the mapping will be calculated on the fly
         :return: a TimeDependentMatrix object
         """
-        raise NotImplementedError("Instantiation from report currently not available!")
+        from .io.synapse_report import sonata_report, load_report, get_presyn_mapping, reindex_report, aggregate_data
+        from .circuit_models.neuron_groups.grouping_config import load_filter
+
+        nrn = load_filter(sim.circuit, load_cfg)
+        lu_node_idx = pd.Series(range(len(nrn["node_ids"])), index=nrn["node_ids"])
+
+        report, report_node_idx = sonata_report(sim, report_cfg)
+        tgt_report_node_idx = np.intersect1d(nrn["node_ids"], report_node_idx)
+        non_report_node_idx = np.setdiff1d(nrn["node_ids"], tgt_report_node_idx)
+        data = load_report(report, report_cfg, tgt_report_node_idx)  # load only target (postsynaptic) node ids
+
+        if presyn_mapping is None or len(tgt_report_node_idx) < len(report_node_idx):
+            # the saved mapping is usually defined based on the full report, so if only parts are loaded
+            # one would need to filter the mapping as well at which point, it's faster to just recalculate it
+            presyn_mapping = get_presyn_mapping(sim.circuit, report_cfg["edge_population"], data.index)
+        if not isinstance(presyn_mapping, pd.DataFrame):
+            presyn_mapping = pd.read_pickle(presyn_mapping)
+
+        data = reindex_report(data, presyn_mapping)
+        data = data.iloc[data.index.get_level_values(0).isin(nrn["node_ids"])]  # filter to have only target pre_node_idx
+        print("Report read! Starting aggregation of %i data points..." % data.shape[0])
+
+        edges = aggregate_data(data, report_cfg, lu_node_idx)
+
+        if len(non_report_node_idx) > 0:
+            from .circuit_models import circuit_connection_matrix
+            print("Looking up static values for %i non-reported postsynaptic neurons..." % len(non_report_node_idx))
+            agg_funcs = list(edges.columns.levels[0])
+            Ms = circuit_connection_matrix(sim.circuit, connectome=report_cfg["edge_population"],
+                                           for_gids=nrn["node_ids"], for_gids_post=non_report_node_idx,
+                                           edge_property=report_cfg["static_prop_name"], agg_func=agg_funcs)
+            ts = edges.columns.levels[1]
+            stat_edges = [pd.DataFrame.from_dict({t: Ms[agg_func].tocoo().data for t in ts})
+                          for agg_func in agg_funcs]
+            stat_edges = pd.concat(stat_edges, axis=1, copy=False,  keys=agg_funcs)
+            stat_edges.columns.set_names(edges.columns.names, inplace=True)
+            # map (non-reported, local) col idx to node ids and then back to (global) col idx
+            lu_nr_node_idx = pd.Series(non_report_node_idx)
+            stat_col_idx = lu_node_idx[lu_nr_node_idx[Ms[agg_funcs[0]].tocoo().col]].to_numpy()
+            stat_edges.index = pd.MultiIndex.from_arrays(np.array([Ms[agg_funcs[0]].tocoo().row, stat_col_idx]),
+                                                         names=["row", "col"])
+            edges = pd.concat([edges, stat_edges])
+            edges.sort_index(inplace=True)
+
+        new_idx = pd.RangeIndex(len(edges))
+        edges.set_index(new_idx, inplace=True)
+        edges.index.name = "edge_id"  # stupid pandas
+        return cls(edges.index.to_frame().set_index(new_idx), edge_properties=edges,
+                   vertex_properties=nrn.set_index("node_ids"), shape=(len(nrn), len(nrn)))
 
 
 class ConnectivityInSubgroups(ConnectivityMatrix):
