@@ -164,7 +164,9 @@ def _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_p
                 indices.extend(row_ids)
                 data_pre = pandas.Series(numpy.hstack(data_pre), index=ids_pre)
                 data_pre = data_pre[data_pre.index.intersection(idx)]
-                res = data_pre.groupby(level=0, group_keys=False).agg(agg_func)  # here is the main difference from the above one
+                # here is the main difference from the one below
+                # (this is needed to be in sync. for `.io.synapse_report/aggregate_data()`)
+                res = data_pre.groupby(level=0, group_keys=False).agg(agg_func)
                 for agg_f in agg_func:
                     data[agg_f].extend(res[agg_f].to_numpy())
 
@@ -201,9 +203,8 @@ def connection_matrix_for_gids(sonata_fn, gids, gids_post=None, population="defa
                                              for k, v in M.items()])
         return M.tocsr()[numpy.ix_(gids, gids_post)]
     if edge_property is not None:
-        assert agg_func is not None, "When looking up connection properties, must provide an agg_func, such as mean"
-        return _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_property,
-                                             agg_func, **kwargs)
+        assert agg_func is not None, "When looking up connection properties, must provide an agg_func, such as 'mean'"
+        return _connection_property_for_gids(sonata_fn, gids, gids_post, population, edge_property, agg_func)
     
     h5 = h5py.File(sonata_fn, "r")['edges/%s' % population]
     idx = numpy.array(gids)
