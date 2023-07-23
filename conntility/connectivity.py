@@ -1175,8 +1175,6 @@ class ConnectivityMatrix(object):
                 npairs = self.vertices[with_respect_to].value_counts().apply(lambda x: x ** 2 - x).sort_index()
             mdlrty = (real.divide(npairs, fill_value=0) ** resolution_param) * mdlrty
         return mdlrty
-    
-
 
     @classmethod
     def from_h5(cls, fn, group_name=None, prefix=None):
@@ -1531,9 +1529,13 @@ class TimeDependentMatrix(ConnectivityMatrix):
             raise ValueError("No time point at {0} given".format(new_time))  # TODO: interpolate to nearest point?
         self._time = new_time
         return self
-    
-    def add_edge_property(self, new_label, new_values):
-        raise NotImplementedError("Not yet implemented for TimeDependentMatrix")
+
+    def delta(self, t_fr, t_to):
+        """Adds new `edge_property` (called 'delta') as the changes occuring between two time steps."""
+        delta = self._edges[t_to] - self._edges[t_fr]
+        for agg_fn in delta.columns.to_numpy():
+            self.add_edge_property(("delta", agg_fn), delta[agg_fn].to_numpy())
+        return self
     
     def default(self, new_default_property, copy=True):
         ret = super().default(new_default_property, copy=copy)
@@ -1541,13 +1543,13 @@ class TimeDependentMatrix(ConnectivityMatrix):
         return ret
     
     @classmethod
-    def from_report(cls, sim, report_cfg, load_cfg=None, presyn_mapping=None):
+    def from_report(cls, sim, report_cfg, load_cfg, presyn_mapping=None):
         """
         A sonata synapse (compartment) report based constructor
         :param sim: `bluepysnap.Simulation` object
         :param report_cfg: config dict with report's name, time steps to load,
                            static property name to look up for synapses that aren't reported,
-                           and optionally the names of the aggregation functions to use
+                           and the names of the aggregation functions to use
         :param load_cfg: config dict for loading and filtering neurons from the circuit
         :param presyn_mapping: mapping used to convert report from Neurodamus' post_gid & local_syn_id to
                                pre_gid and post_gid which can then be grouped and aggregated to get weighted connectomes
@@ -1600,11 +1602,13 @@ class TimeDependentMatrix(ConnectivityMatrix):
             edges = pd.concat([edges, stat_edges])
             edges.sort_index(inplace=True)
 
+        # separate the index from the edges (they're needed separately for the class' `init`)
         new_idx = pd.RangeIndex(len(edges))
+        edge_idx = edges.index.to_frame().set_index(new_idx)
         edges.set_index(new_idx, inplace=True)
         edges.index.name = "edge_id"  # stupid pandas
-        return cls(edges.index.to_frame().set_index(new_idx), edge_properties=edges,
-                   vertex_properties=nrn.set_index("node_ids"), shape=(len(nrn), len(nrn)))
+        return cls(edge_idx, edge_properties=edges, vertex_properties=nrn.set_index("node_ids"),
+                   shape=(len(nrn), len(nrn)))
 
 
 class ConnectivityInSubgroups(ConnectivityMatrix):
