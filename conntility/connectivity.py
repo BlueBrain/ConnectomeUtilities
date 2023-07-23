@@ -134,51 +134,66 @@ class _MatrixEdgeIndexer(object):
     A helper class used to sample filtered versions of a network, i.e. same set of nodes, but a subset of edges.
     Instantiate using ConnectivityMatrix.filter.
     """
-    def __init__(self, parent, prop_name):
+    def __init__(self, parent, prop_name, side=None):
+        # TODO: Enable using an 'edge-associated-node-property' as well.
         self._parent = parent
-        self._prop = parent.edges[prop_name].values
+        self._prop_name = prop_name
+        self._side = side
+        if prop_name in list(parent.edge_properties):
+            self._prop = parent.edges[prop_name]
+        elif prop_name in list(parent.vertex_properties):
+            self._prop = parent.edge_associated_vertex_properties(prop_name)
+            if side is not None:
+                self._prop = self._prop[side]
+        else:
+            raise ValueError("Unknown property: {0}".format(prop_name))
+    
+    def _reduce_(self, idxx):
+        if isinstance(idxx, pd.DataFrame):
+            return self._parent.subedges(np.all(idxx, axis=1))
+        return self._parent.subedges(idxx.values)
 
     def eq(self, other):
         """
         Return network with edges where the value of the indexed property is equal to the provided reference.
         """
         idxx = self._prop == other
-        return self._parent.subedges(idxx)
+        return self._reduce_(idxx)
 
     def isin(self, other):
         """
         Return network with edges where the value of the indexed property is within the list provided as reference.
         """
         idxx = np.isin(self._prop, other)
-        return self._parent.subedges(idxx)
+        return self._reduce_(idxx)
 
     def le(self, other):
         """
         Return network with edges where the value of the indexed property is less or equal to the provided reference.
         """
         idxx = self._prop <= other
-        return self._parent.subedges(idxx)
+        return self._reduce_(idxx)
 
     def lt(self, other):
         """
         Return network with edges where the value of the indexed property is less than the provided reference.
         """
         idxx = self._prop < other
-        return self._parent.subedges(idxx)
+        return self._reduce_(idxx)
 
     def ge(self, other):
         """
         Return network with edges where the value of the indexed property is greater or equal to the provided reference.
         """
         idxx = self._prop >= other
-        return self._parent.subedges(idxx)
+        return self._reduce_(idxx)
 
     def gt(self, other):
         """
         Return network with edges where the value of the indexed property is greater than the provided reference.
         """
         idxx = self._prop > other
-        return self._parent.subedges(idxx)
+        return self._reduce_(idxx)
 
     def full_sweep(self, direction='decreasing'):
         """
@@ -188,8 +203,9 @@ class _MatrixEdgeIndexer(object):
         #  For an actual filtration. Take all values and sweep
         raise NotImplementedError()
     
-    def random_by_vertex_property_ids(self, ref, prop_name, n_bins=None, is_edges=False):
+    def random_by_vertex_property_ids(self, ref, n_bins=None, is_edges=False):
         """
+        TODO: Instead of specifying a node property here, specify it when instantiating this object.
         Return a random subnetwork with the same nodes but only a subset of the edges. The subset is randomly generated 
         based on a reference. 
         The returned subnetwork will match the reference in terms of the distributions of the specified node property for
@@ -201,8 +217,6 @@ class _MatrixEdgeIndexer(object):
           In the first case, it is a list of edge ids (indices of ConnectivityMatrix._edges).
           In the second case it is either a ConnectivityMatrix object or a list of the "gid" node property of the base 
           network.
-
-          prop_name: Must be a node property (ConnectivityMatrix.vertex_properties) to match the distribution of.
 
           n_bins: If provided, the node property will be binned as specified. Node property must then be numerical.
 
@@ -225,8 +239,9 @@ class _MatrixEdgeIndexer(object):
                     ref = self._parent.subedges(ref)
                     print("Interpreting reference as edge ids!")
 
-        ref_edges = ref.edge_associated_vertex_properties(prop_name)
-        parent_edges = self._parent.edge_associated_vertex_properties(prop_name)
+        ref_edges = ref.edge_associated_vertex_properties(self._prop_name)
+        if self._side is not None: ref_edges = ref_edges[self._side]
+        parent_edges = self._prop #self._parent.edge_associated_vertex_properties(prop_name)
 
         if n_bins is not None:
             mn, mx = np.min(parent_edges.values.flat), np.max(parent_edges.values.flat)
@@ -235,14 +250,14 @@ class _MatrixEdgeIndexer(object):
             parent_edges = parent_edges.apply(np.digitize, axis=0, bins=bins)
 
         ref_counts = ref_edges.value_counts()
-        parent_edges = parent_edges.reset_index().set_index(["row", "col"])["index"]
+        parent_edges = parent_edges.reset_index().set_index(list(ref_counts.index.names))["index"]
 
         out_edges = []
         for _idx, n in ref_counts.items():
             out_edges.extend(np.random.choice(parent_edges[_idx].values, n, replace=False))
         return out_edges
     
-    def random_by_vertex_property(self, ref, prop_name, n_bins=None):
+    def random_by_vertex_property(self, ref, n_bins=None):
         """
         Generates a random subnetwork containing all nodes and a subset of edges. Based on matching
         the distribution of properties of source and target nodes to a reference subnetwork.
@@ -251,7 +266,7 @@ class _MatrixEdgeIndexer(object):
         Returns:
           A ConnectivityMatrix object representing the subnetwork.
         """
-        edge_ids = self.random_by_vertex_property_ids(ref, prop_name, n_bins=n_bins)
+        edge_ids = self.random_by_vertex_property_ids(ref, n_bins=n_bins)
         return self._parent.subedges(edge_ids)
 
 
@@ -399,17 +414,18 @@ class ConnectivityMatrix(object):
         """
         return len(self.gids)
 
-    def add_vertex_property(self, new_label, new_values):
+    def add_vertex_property(self, new_label, new_values, overwrite=False):
         """
-        Assign values for a new property to all nodes. Must be a non-existing property.
+        Assign values for a new property to all nodes. Must be a non-existing property or overwrite=True.
 
         Args:
           new_label (str): Name of the new property. No property with this name may already exist.
           new_values (iterable): Values for the new property. Must have same length as this object.
           If provided as a DataFrame, must have the same index as obj._vertex_properties
+          overwrite (bool, default=False)
         """
         assert len(new_values) == len(self), "New values size mismatch"
-        assert new_label not in self._vertex_properties, "Property {0} already exists!".format(new_label)
+        assert overwrite or (new_label not in self._vertex_properties), "Property {0} already exists!".format(new_label)
         self._vertex_properties[new_label] = new_values
     
     def add_edge_property(self, new_label, new_values):
@@ -498,7 +514,7 @@ class ConnectivityMatrix(object):
         # TODO: Think about adding GID here as well?
         return self._vertex_properties.columns.values
     
-    def edge_associated_vertex_properties(self, prop_name):
+    def edge_associated_vertex_properties(self, prop_name, side=None):
         """
         The list of values of the specified node property associated with all edges. That is, for each edge
         the value of the property is returned for the source and target nodes. 
@@ -580,21 +596,24 @@ class ConnectivityMatrix(object):
         assert prop_name in self._vertex_properties, "vertex property should be in " + str(self.vertex_properties)
         return _MatrixNodeIndexer(self, prop_name)
 
-    def filter(self, prop_name=None):
+    def filter(self, prop_name=None, side=None):
         """
         Returns an object for the generation of subnetworks based on values of the specified edge property.
         For details, see _MatrixEdgeIndexer.
 
         Args:
-          prop_name (str): Must be in obj.edge_properties. Name of the property based on which subnetworks
-          are to be sampled. 
+          prop_name (str): Must be in obj.edge_properties or obj.vertex_properties.
+          Name of the property based on which subnetworks are to be sampled. 
+          side (optional, one of "row", "col): Relevant when prop_name is a vertex_property. If "row", then
+          the specified vertex property of the source side of the connection is used. If "col", then the
+          target side is used. If not provided, the combination of both is used.
         
         Returns:
           _MatrixEdgeIndexer associated with this object.
         """
         if prop_name is None:
             prop_name = self._default_edge
-        return _MatrixEdgeIndexer(self, prop_name)
+        return _MatrixEdgeIndexer(self, prop_name, side=side)
 
     def default(self, new_default_property, copy=True):
         """
