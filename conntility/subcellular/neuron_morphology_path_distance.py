@@ -290,12 +290,12 @@ class MorphologyPathDistanceCalculator(object):
         index_names = list(locs.index.names)
         assert "index" not in index_names
         locs = locs.reset_index().reset_index()
-        data = locs.groupby(index_names)["index"].apply(self.__nnd__)
+        data = locs.groupby(index_names)["index"].apply(lambda _s: self.__nnd__(D, _s))
         if not normalize:
             return data
         
         sampler = self.__rnd_sampler__(locs, normalize_preserve, normalize_n)
         if normalize_preserve is None: normalize_preserve = "index"
         counts = locs.groupby(index_names)[normalize_preserve].apply(lambda x: len(x.drop_duplicates()))
-        ctrl = counts.apply(lambda c: numpy.hstack([self.__nnd__(_s) for _s in sampler(c)]))
+        ctrl = counts.apply(lambda c: numpy.hstack([self.__nnd__(D, _s) for _s in sampler(c)]))
         return data.combine(ctrl, lambda _d, _c: (numpy.nanmean(_d) - numpy.nanmean(_c)) / numpy.nanstd(_c))
