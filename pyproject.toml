@@ -34,4 +34,12 @@ dependencies = ["numpy>=1.20.0",
 "Bug Tracker" = "https://github.com/BlueBrain/ConnectomeUtilities/issues"
 
 [tool.setuptools]
-packages = ["conntility"]
+packages = ["conntility",
+            "conntility.analysis",
+            "conntility.analysis.library",
+            "conntility.circuit_models",
+            "conntility.circuit_models.neuron_groups",
+            "conntility.flatmapping",
+            "conntility.io",
+            "conntility.randomization",
+            "conntility.subcellular"]
