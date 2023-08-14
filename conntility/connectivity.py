@@ -778,6 +778,11 @@ class ConnectivityMatrix(object):
                                   edge_properties=out_edges, default_edge_property=self._default_edge,
                                   shape=(len(subpop_ids), len(subpop_ids)))
     
+    def sort_by(self, property_name):
+        index_name = self._vertex_properties.index.name or "index"
+        idxx = self.vertices.sort_values(property_name)[index_name]
+        return self.subpopulation(idxx.values)
+    
     def slice(self, angle, position, thickness, columns_slice=["x", "z"], column_y="y"):
         """A ConnectivityMatrix object representing the subpopulation given by a slicing operation.
         First, a slice-specific coordinate system is defined, based on existing coordinates in the
