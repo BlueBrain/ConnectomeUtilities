@@ -778,9 +778,30 @@ class ConnectivityMatrix(object):
                                   edge_properties=out_edges, default_edge_property=self._default_edge,
                                   shape=(len(subpop_ids), len(subpop_ids)))
     
-    def sort_by(self, property_name):
+    def reorder(self, property_name, order=None):
+        """
+        Change the order of vertices.
+
+        Args: 
+          property_name (str): Name of a vertex property that is to be used to determined the new order.
+          order (optional): A list that specifies values of property_name. The vertices of the returned
+          object are reordered accordingly. If not specified, values will be sorted in increasing order.
+
+        Note: 
+          - By specifying order, one can also generate a subpopulation by not listing every value.
+          - There must not be duplicate values in order.
+          - If there are duplicate values in the specified property, all vertices with that value are
+          going to be returned.
+        """
         index_name = self._vertex_properties.index.name or "index"
-        idxx = self.vertices.sort_values(property_name)[index_name]
+        if order is None:
+            idxx = self.vertices.sort_values(property_name)[index_name]
+        else:
+            assert len(np.unique(order)) == len(order)
+            if index_name == property_name: self.subpopulation(order)
+            assert np.all(np.in1d(order, self.vertices[property_name]))
+            idxp = self.vertices.set_index(property_name)[index_name]
+            idxx = idxp[order]
         return self.subpopulation(idxx.values)
     
     def slice(self, angle, position, thickness, columns_slice=["x", "z"], column_y="y"):
