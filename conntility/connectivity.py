@@ -164,7 +164,7 @@ class _MatrixEdgeIndexer(object):
         """
         Return network with edges where the value of the indexed property is within the list provided as reference.
         """
-        idxx = np.isin(self._prop, other)
+        idxx = self._prop.isin(other)
         return self._reduce_(idxx)
 
     def le(self, other):
