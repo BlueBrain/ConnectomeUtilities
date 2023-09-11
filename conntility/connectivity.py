@@ -614,6 +614,53 @@ class ConnectivityMatrix(object):
         if prop_name is None:
             prop_name = self._default_edge
         return _MatrixEdgeIndexer(self, prop_name, side=side)
+    
+    def filter_with_function(self, filter_func, mask=None, vertex_properties=None, **kwargs):
+        """
+        Apply an edge filtering function, returning a copy of the object with the same vertices, but only the 
+        edges that pass the filtering function.
+        For simple filtering functions (e.g. value of a single edge property below a given value) see .filter
+        instead.
+
+        Args:
+          filter_func (function): The function defining the filter. Takes as input a pandas.DataFrame of edge properties
+          (one row per edge). Returns as output an iterable of the same length with boolean values: True indicates 
+          that an edge is kept, False that it should be discarded.
+
+          mask (optional): Defines a mask that determines which edges the filter_func should be applied to. 
+          Filtering is only applied to edges where the associated
+          value is True. (That means and edge passes if filter_func yields True OR mask yields False). However note
+          that filter_func is only called on the edges that are not masked out, i.e. mask is applied _before_ the
+          function call!
+          If not provided, filtering is applied to all edges. Must be an iterable of length = number of edges, or
+          a function with the same specs as filter_func.
+
+          vertex_properties (optional): By default, the filtering function has access to a DataFrame of all the
+          edge properties in the object. This argument is an optional list of vertex properties that will be made 
+          available in addition, as described in .edge_associated_vertex_properties. The names of these properties
+          will be the name of the original vertex property, followed by ":row" for the property value associated
+          with the source vertex and ":col" for the property value associated with the target vertex.
+          
+          Additional kwargs are forwarded as-is to the filtering_function.
+          """
+        
+        df = self.edges.reset_index(drop=True)
+        if vertex_properties is not None:
+            df = pd.concat( [df] + 
+                [self.edge_associated_vertex_properties(_prop).rename(columns={"row": _prop + ":row",
+                                                                               "col": _prop + ":col"})
+                 for _prop in vertex_properties], axis=1
+                 )
+        if mask is None:
+            mask = np.ones(len(df), dtype=bool)
+        elif hasattr(mask, "__call__"):
+            mask = np.array(mask(df))
+        else:
+            mask = np.array(mask)
+        passes_filter = np.ones(len(mask), dtype=bool)
+        passes_filter[mask.values] = filter_func(df.loc[mask], **kwargs)
+        return self.subedges(passes_filter)
+        
 
     def default(self, new_default_property, copy=True):
         """
