@@ -661,7 +661,6 @@ class ConnectivityMatrix(object):
         passes_filter[mask.values] = filter_func(df.loc[mask], **kwargs)
         return self.subedges(passes_filter)
         
-
     def default(self, new_default_property, copy=True):
         """
         Set the default edge property to return. Used in obj.matrix, obj.dense_matrix, obj.array
@@ -683,6 +682,41 @@ class ConnectivityMatrix(object):
                                   edge_properties=self._edges,
                                   vertex_properties=self._vertex_properties, shape=self._shape,
                                   default_edge_property=new_default_property)
+    
+    def condense(self, agg_funcs=None):
+        """
+        Returns a condensed version of this object. That is, assuming this object contains multiple edges
+        between vertices, they are condensed to a single edge with an associated property called "count"
+        that specifies the number of edges in the original version. 
+        Other edge properties (beyond "count") are lost unless explicitly specified using the "agg_funcs"
+        kwarg.
+
+        Args:
+          agg_funcs (optional, dict): Specifies which of the original edge properties to carry over to the
+          condensed version and how to aggregate them into a single value.
+          Keys of the dict are the names of the properties in the condensed version; values must be a tuple,
+          where the first entry is the name of the property in the original version and the second one 
+          specifies the aggregation function. This is either a string naming a standard function (such as
+          "mean") or a function taking a list as input and a single value as output. For details and which
+          strings are valid, see pandas.groupby.apply.
+        """
+        grp = self._edges.set_index(pd.MultiIndex.from_frame(self._edge_indices)).groupby(["row", "col"])
+        agg_props = [
+            # Since we just count, the property does not matter. Take first.
+            grp[self.edge_properties[0]].count().rename("count")
+        ]
+        if agg_funcs is not None:
+            for prop_name, prop_specs in agg_funcs.items():
+                assert prop_name != "count", "'count' is a reserved property name!"
+                prop_col, prop_fun = prop_specs
+                agg_props.append(grp[prop_col].apply(prop_fun).rename(prop_name))
+        
+        raw_edge_props = pd.concat(agg_props, axis=1)
+        return ConnectivityMatrix(
+            raw_edge_props.index.to_frame().reset_index(drop=True),
+            vertex_properties=self._vertex_properties,
+            edge_properties=raw_edge_props.reset_index(drop=True),
+            shape=(len(self.vertices), len(self.vertices)))
 
     @staticmethod
     def __extract_vertex_ids__(an_obj):
