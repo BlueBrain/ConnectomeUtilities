@@ -683,18 +683,18 @@ class ConnectivityMatrix(object):
                                   vertex_properties=self._vertex_properties, shape=self._shape,
                                   default_edge_property=new_default_property)
     
-    def condense(self, agg_funcs=None):
+    def compress(self, agg_funcs=None):
         """
-        Returns a condensed version of this object. That is, assuming this object contains multiple edges
-        between vertices, they are condensed to a single edge with an associated property called "count"
+        Returns a compressed version of this object. That is, assuming this object contains multiple edges
+        between vertices, they are compressed to a single edge with an associated property called "count"
         that specifies the number of edges in the original version. 
         Other edge properties (beyond "count") are lost unless explicitly specified using the "agg_funcs"
         kwarg.
 
         Args:
           agg_funcs (optional, dict): Specifies which of the original edge properties to carry over to the
-          condensed version and how to aggregate them into a single value.
-          Keys of the dict are the names of the properties in the condensed version; values must be a tuple,
+          compressed version and how to aggregate them into a single value.
+          Keys of the dict are the names of the properties in the compressed version; values must be a tuple,
           where the first entry is the name of the property in the original version and the second one 
           specifies the aggregation function. This is either a string naming a standard function (such as
           "mean") or a function taking a list as input and a single value as output. For details and which
