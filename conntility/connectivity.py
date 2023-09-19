@@ -699,6 +699,12 @@ class ConnectivityMatrix(object):
           specifies the aggregation function. This is either a string naming a standard function (such as
           "mean") or a function taking a list as input and a single value as output. For details and which
           strings are valid, see pandas.groupby.apply.
+
+          Example for agg_funcs:
+            {
+              "total_size": ("size", "sum"),
+              "mean_size": ("size", "mean")
+            }
         """
         grp = self._edges.set_index(pd.MultiIndex.from_frame(self._edge_indices)).groupby(["row", "col"])
         agg_props = [
