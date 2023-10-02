@@ -399,12 +399,12 @@ class ConnectivityMatrix(object):
 
         self._lookup = self.__make_lookup__()
         #  NOTE: This part implements the .gids and .depth properties
-        for colname in self._vertex_properties.columns:
-            #  TODO: Check colname against existing properties
-            setattr(self, colname, self._vertex_properties[colname].values)
-
         # TODO: calling it "gids" might be too BlueBrain-specific! Change name?
         self.gids = self._vertex_properties.index.values
+        for colname in self._vertex_properties.columns:
+            if not hasattr(self, colname):
+                setattr(self, colname, self._vertex_properties[colname].values)
+
         # TODO: Additional tests, such as no duplicate edges!
         self.neighborhood = _MatrixNeighborhoodIndexer(self)
 
@@ -524,9 +524,11 @@ class ConnectivityMatrix(object):
         Returns:
           pandas.DataFrame with the values of the property for source and target node in the columns.
         """
-        assert (prop_name in self.vertex_properties) or (prop_name == GID), "{0} is not a vertex property: {1}".format(prop_name, self.vertex_properties)
+        assert (prop_name in self.vertex_properties) or (prop_name == "gids"), "{0} is not a vertex property: {1}".format(prop_name, self.vertex_properties)
+        if prop_name == "gids": col = pd.Series(self.gids)
+        else: col = self.vertices[prop_name]
         eavp = pd.concat(
-            [self.vertices[prop_name][self._edge_indices[_idx]].rename(_idx).reset_index(drop=True)
+            [col[self._edge_indices[_idx]].rename(_idx).reset_index(drop=True)
              for _idx in self._edge_indices.columns],
              axis=1, copy=False
         )
@@ -726,8 +728,8 @@ class ConnectivityMatrix(object):
 
     @staticmethod
     def __extract_vertex_ids__(an_obj):
-        if hasattr(an_obj, GID):
-            return getattr(an_obj, GID)
+        if hasattr(an_obj, "gids"):
+            return getattr(an_obj, "gids")
         return an_obj
 
     @classmethod
@@ -1052,7 +1054,7 @@ class ConnectivityMatrix(object):
           target spike is outside the time window!). The ConnectivityGroup contains one Matrix per time
           window.
         """
-        spks = spks.loc[np.isin(spks, self.vertices[GID])]
+        spks = spks.loc[np.isin(spks, self.gids)]
         t_wins = np.array(t_wins).reshape((-1, 2))
         
         eavp = self.edge_associated_vertex_properties("gid")
@@ -1079,7 +1081,7 @@ class ConnectivityMatrix(object):
             "expected_simple": Compared to expectation, based on the overall firing rate.
             "expected_strong": Compared to expectation, based on firing rates and individual degree distributions.
         """
-        spks = spks.loc[np.isin(spks, self.vertices[GID])]
+        spks = spks.loc[np.isin(spks, self.gids)]
         t_wins = np.array(t_wins).reshape((-1, 2))
         assert normalize in ["mean", "sum", "pre", "expected_simple", "expected_strong"], "Unknown normalization: {0}".format(normalize)
 
@@ -1751,8 +1753,8 @@ class ConnectivityInSubgroups(ConnectivityMatrix):
             assert self._vertex_properties[an_obj].dtype == bool, "Population spec must be a column of type bool"
             return self.gids[self._vertex_properties[an_obj]]
 
-        if hasattr(an_obj, GID):
-            return getattr(an_obj, GID)
+        if hasattr(an_obj, "gids"):
+            return getattr(an_obj, "gids")
         return an_obj
 
 
