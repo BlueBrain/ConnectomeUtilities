@@ -166,6 +166,27 @@ def _grouped_by_filtering_config(lst_fltr_cfg, matrix_func):
         return out_function
     return decorator
 
+
+def for_all_neighborhoods():
+    # TODO: Arguments here that allow you to run the analysis for only a subset of centers
+    # E.g. where its value of a property has a given value.
+    from ..analysis import neighborhood_indices
+    from ..connectivity import GID
+    def decorator(analysis_function):
+        def out_function(matrix, nrn_df, *args, **kwargs):
+            nb = neighborhood_indices(matrix)
+            if GID in nrn_df.columns:
+                print("1")
+                nb.index = nrn_df[GID].values
+            else:
+                print("0")
+                nb.index = nrn_df.index
+            Mc = matrix.tocsc()
+            return nb.apply(lambda _x: analysis_function(Mc[numpy.ix_(_x, _x)]))
+        return out_function
+    return decorator
+
+
 def control_by_randomization(randomization, n_randomizations=10, only_mean=True, **rand_kwargs):
     if hasattr(randomization, "apply"):
         func = randomization.apply
