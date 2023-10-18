@@ -483,6 +483,11 @@ class ConnectivityMatrix(object):
             edge_property = self._default_edge
         return sparse.coo_matrix((self.edges[edge_property], (self._edge_indices["row"], self._edge_indices["col"])),
                                  shape=self._shape, copy=False)
+
+    @property
+    def is_multigraph(self):
+        return len(self._edge_indices) != len(self._edge_indices.drop_duplicates())
+    
     @property
     def edges(self):
         """
@@ -513,6 +518,17 @@ class ConnectivityMatrix(object):
         """
         # TODO: Think about adding GID here as well?
         return self._vertex_properties.columns.values
+    
+    def to_reciprocal(self):
+        """
+        Drop all edges that are note reciprocal. Not available for multigraphs.
+        """
+        assert not self.is_multigraph, "Function not yet available for multigraphs. Use .compress() to get a non-multigraph!"
+        e_rv = self._edge_indices.reset_index(drop=True).rename(columns={"row": "col", "col": "row"})[["row", "col"]]
+
+        e = pd.concat([e_rv, self._edge_indices.reset_index(drop=True)], axis=0)
+        vc = e.drop_duplicates(keep="last").index.value_counts()
+        return self.subedges(vc.index[vc == 1].values)
     
     def edge_associated_vertex_properties(self, prop_name, side=None):
         """
