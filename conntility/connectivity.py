@@ -1825,7 +1825,12 @@ class ConnectivityGroup(object):
         else:
             circ = bluepy_obj
         
-        nrn = load_group_filter(circ, load_config)
+        if load_config is not None:
+            nodepop = kwargs.get("node_population",
+                                 load_config.get("loading", load_config).get("node_population", None))
+        else:
+            nodepop = kwargs.get("node_population", None)
+        nrn = load_group_filter(circ, load_config, node_population=nodepop)
 
         # TODO: think a bit about if it should even be possible to call this for a projection (remove arg. if not...)
         mats = circuit_group_matrices(circ, nrn, connectome=connectome, **kwargs)
