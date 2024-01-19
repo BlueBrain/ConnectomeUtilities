@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Connectome-Utilities"
-version = "0.4.6"
+version = "0.4.7"
 authors = [
   { name="Blue Brain Project, EPFL", email="conntility.645co@simplelogin.com" },
 ]

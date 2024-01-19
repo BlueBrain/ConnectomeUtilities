@@ -1379,6 +1379,63 @@ class ConnectivityMatrix(object):
             data_grp.attrs["NEUROTOP_SHAPE"] = self._shape
             data_grp.attrs["NEUROTOP_DEFAULT_EDGE"] = self._default_edge
             data_grp.attrs["NEUROTOP_CLASS"] = "ConnectivityMatrix"
+    
+    def to_networkx(self, add_vertex_properties=True, add_edge_properties=True):
+        try:
+            import networkx
+        except ImportError:
+            print("This optional functionality requires installation of the networkx package!")
+            raise
+
+        if add_edge_properties:
+            G = networkx.DiGraph()
+            if add_vertex_properties:
+                for _r in self.vertices.iterrows():
+                    G.add_node(_r[0], **_r[1].to_dict())
+            else:
+                G.add_nodes_from(range(len(self)))
+            for _idx, _prop in zip(self._edge_indices.iterrows(), self.edges.iterrows()):
+                G.add_edge(_idx[1]["row"], _idx[1]["col"], **_prop[1].to_dict())
+        else:
+            G = networkx.DiGraph(self.matrix)
+            if add_vertex_properties:
+                for _r in self.vertices.iterrows():
+                    G.nodes[_r[0]].update(**_r[1].to_dict())
+        return G
+    
+    @classmethod
+    def from_networkx(cls, G):
+        try:
+            import networkx
+        except ImportError:
+            print("This optional functionality requires installation of the networkx package!")
+            raise
+
+        lst_vert_props = set([k for n in G.nodes for k in G.nodes[n].keys()])
+        lst_edge_props = set([k for n in G.edges for k in G.edges[n].keys()])
+
+        if len(lst_vert_props) == 0: verts = pd.DataFrame({}, index=range(len(G)))
+        else:
+            verts = [pd.Series(networkx.get_node_attributes(G, _prop), name=_prop)
+                    for _prop in lst_vert_props]
+            verts = pd.concat(verts, axis=1).reset_index(drop=True)
+            if "index" in lst_vert_props: verts = verts.set_index("index", drop=True)
+
+        if len(lst_edge_props) == 0:
+            edge_indices = pd.DataFrame(G.edges, columns=["row", "col"])
+            edges = None
+        else:
+            edges = [pd.Series(networkx.get_edge_attributes(G, _prop), name=_prop)
+                    for _prop in lst_edge_props]
+            edges = pd.concat(edges, axis=1)
+            edge_indices = edges.index.to_frame().reset_index(drop=True)
+            edge_indices.columns = ["row", "col"]
+            edges = edges.reset_index(drop=True)
+
+        return cls(edge_indices, edge_properties=edges, vertex_properties=verts)
+
+
+
 
 
 def _update_load_config(load_cfg, sim_tgt):
