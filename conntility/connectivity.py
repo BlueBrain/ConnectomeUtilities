@@ -1423,7 +1423,8 @@ class ConnectivityMatrix(object):
 
         if len(lst_edge_props) == 0:
             edge_indices = pd.DataFrame(G.edges, columns=["row", "col"])
-            edges = None
+            edges = pd.DataFrame(np.ones(len(edge_indices), dtype=bool), columns=["data"],
+                                 index=edge_indices.index)
         else:
             edges = [pd.Series(networkx.get_edge_attributes(G, _prop), name=_prop)
                     for _prop in lst_edge_props]
@@ -1432,7 +1433,8 @@ class ConnectivityMatrix(object):
             edge_indices.columns = ["row", "col"]
             edges = edges.reset_index(drop=True)
 
-        return cls(edge_indices, edge_properties=edges, vertex_properties=verts)
+        return cls(edge_indices, edge_properties=edges,
+                   vertex_properties=verts, shape=(len(verts), len(verts)))
 
 
 
