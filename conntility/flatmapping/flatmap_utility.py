@@ -93,10 +93,10 @@ def apply_flatmap_with_translation(xyz, uvw, fm, max_translation=2000):
     :param max_translation: float.
     :return: Flat locations of the xyz coordinates in the flatmap.
     """
-    solution = fm.lookup(xyz)
+    solution = fm.lookup(xyz, outer_value=-1)
     if uvw is not None and not numpy.all(solution > 0):
         # 1)
-        solution = fm.lookup(xyz + FIX_TRANSITION * uvw)
+        solution = fm.lookup(xyz + FIX_TRANSITION * uvw, outer_value=-1)
         if numpy.all(solution > 0):
             return solution
         else:
@@ -104,13 +104,14 @@ def apply_flatmap_with_translation(xyz, uvw, fm, max_translation=2000):
             fac = 0
             step = fm.voxel_dimensions[0] / 4
             tl_factors = numpy.zeros((len(uvw), 1))
-            solution = fm.lookup(xyz)
+            solution = fm.lookup(xyz, outer_value=-1)
             while numpy.any(solution < 0) and fac < max_translation:
                 try:
                     fac += step
                     to_update = numpy.any(solution < 0, axis=1)
                     tl_factors[to_update, 0] = fac
-                    solution[to_update, :] = fm.lookup(xyz[to_update, :] + tl_factors[to_update, :] * uvw[to_update, :])
+                    solution[to_update, :] = fm.lookup(xyz[to_update, :] + tl_factors[to_update, :] * uvw[to_update, :],
+                                                       outer_value=-1)
                 except VoxcellError:
                     break
     return solution
