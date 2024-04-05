@@ -676,7 +676,7 @@ class ConnectivityMatrix(object):
         else:
             mask = np.array(mask)
         passes_filter = np.ones(len(mask), dtype=bool)
-        passes_filter[mask.values] = filter_func(df.loc[mask], **kwargs)
+        passes_filter[mask] = filter_func(df.loc[mask], **kwargs)
         return self.subedges(passes_filter)
         
     def default(self, new_default_property, copy=True):
